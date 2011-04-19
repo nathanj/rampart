@@ -1,6 +1,7 @@
 
 var a;
 var c;
+var cannonballs = new Array();
 
 
 var width=40
@@ -118,7 +119,9 @@ function figureOutProperty()
 	}
 }
 
-function onClick(e)
+var ctrl = false;
+
+function makeWall(e)
 {
 	var pos = getCursorPosition(e);
 
@@ -134,12 +137,76 @@ function onClick(e)
 	draw();
 }
 
+function fireCannonball(e)
+{
+	var pos = getCursorPosition(e);
+
+	var cb = new Cannonball(30, 30, pos.x, pos.y);
+	cannonballs.push(cb);
+
+	draw();
+}
+
+function onClick(e)
+{
+	if (ctrl)
+		fireCannonball(e);
+	else
+		makeWall(e);
+}
+
+function doKeyDown(e)
+{
+	switch(e.keyCode)
+	{
+		case 17:
+			ctrl = true;
+	}
+}
+
+function doKeyUp(e)
+{
+	switch(e.keyCode)
+	{
+		case 17:
+			ctrl = false;
+	}
+}
+
 function init()
 {
 	a = document.getElementById("a");
     a.addEventListener("click", onClick, false);
+	window.addEventListener('keydown', doKeyDown, false);
+	window.addEventListener('keyup', doKeyUp, false);
 
 	c = a.getContext("2d");
+
+	setInterval(update, 50);
+
+	draw();
+}
+
+function update() {
+
+	var l = cannonballs.length;
+	for (var i = 0; i < l; i++)
+	{
+		var cb = cannonballs[i];
+		if (!cb.done)
+		{
+			var dist = Math.abs(cb.end_x - cb.curr_x) + Math.abs(cb.end_y - cb.curr_y);
+			cb.curr_x = cb.curr_x + cb.v*cb.dx;
+			cb.curr_y = cb.curr_y + cb.v*cb.dy;
+			var dist2 = Math.abs(cb.end_x - cb.curr_x) + Math.abs(cb.end_y - cb.curr_y);
+
+			if (dist2 > dist)
+			{
+				cb.done = true;
+				board[parseInt(cb.curr_y/16)][parseInt(cb.curr_x/16)] = 5;
+			}
+		}
+	}
 
 	draw();
 }
@@ -168,6 +235,60 @@ figureOutProperty();
 			else if (board[j][i] == CLOSED)
 				drawProperty(i, j);
 		}
+
+	drawCannonballs();
+}
+
+function square(x)
+{
+	return x*x;
+}
+
+function drawCannonballs()
+{
+	var l = cannonballs.length;
+	for (var i = 0; i < l; i++)
+	{
+		var cb = cannonballs[i];
+		if (!cb.done)
+		{
+			var length = Math.sqrt( square(square(cb.start_x-cb.end_x) + square(cb.start_y-cb.end_y)) );
+			var slength = Math.sqrt( square(square(cb.start_x-cb.curr_x) + square(cb.start_y-cb.curr_y)) );
+			var elength = Math.sqrt( square(square(cb.curr_x-cb.end_x) + square(cb.curr_y-cb.end_y)) );
+			var lm = Math.min(slength, elength);
+			c.beginPath();
+			c.arc(cb.curr_x, cb.curr_y, Math.min(48, 1/Math.abs(lm/length - 0.5) * 4), 0, Math.PI*2, false);
+			c.closePath();
+			c.strokeStyle = "#333";
+			c.fillStyle = "#999";
+			c.stroke();
+			c.fill();
+		}
+	}
+}
+
+function Cannonball(start_x, start_y, end_x, end_y) {
+	this.start_x = start_x;
+	this.start_y = start_y;
+	this.curr_x = start_x;
+	this.curr_y = start_y;
+	this.end_x = end_x;
+	this.end_y = end_y;
+	this.v = 5;
+
+	var dx = end_x - start_x;
+	var sx = dx < 0 ? -1 : 1;
+	var dy = end_y - start_y;
+	var sy = dy < 0 ? -1 : 1;
+	var dx2 = dx*dx;
+	var dy2 = dy*dy;
+	dx = sx * Math.sqrt(dx2 / (dx2+dy2));
+	dy = sy * Math.sqrt(dy2 / (dx2+dy2));
+
+	this.dx = dx;
+	this.dy = dy;
+
+	this.done = false;
 }
 
 function Cell(x, y) {
