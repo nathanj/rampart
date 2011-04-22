@@ -187,6 +187,7 @@ int main(int argc, char **argv)
 {
 	int h = -1;
 	struct client *tmp = NULL;
+	struct list_head *pos = NULL, *q = NULL;
 
 	struct client myclient;
 	INIT_LIST_HEAD(&myclient.list);
@@ -245,6 +246,7 @@ int main(int argc, char **argv)
 
 				tmp->fd = r;
 
+				printf("adding client %p fd=%d\n", tmp, tmp->fd);
 				list_add_tail(&(tmp->list), &(myclient.list));
 
 				printf("connect from %d %s\n", r,
@@ -285,6 +287,18 @@ int main(int argc, char **argv)
 
 				tmp->out_len = 0;
 				tmp->out[0] = '\0';
+			}
+		}
+
+		/* Delete all clients which no longer have an open socket. */
+		list_for_each_safe(pos, q, &myclient.list)
+		{
+			tmp = list_entry(pos, struct client, list);
+			if (tmp->fd == -1)
+			{
+				printf("deleting client %p\n", tmp);
+				list_del(pos);
+				free(tmp);
 			}
 		}
 	}
