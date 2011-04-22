@@ -254,41 +254,37 @@ int main(int argc, char **argv)
 
 		list_for_each_entry(tmp, &myclient.list, list)
 		{
-			if (tmp->fd >= 0)
-			{
-				/* Check error. */
-				if (FD_ISSET(tmp->fd, &er)) {
-					char c;
+			/* Check error. */
+			if (tmp->fd >= 0 && FD_ISSET(tmp->fd, &er)) {
+				char c;
 
-					r = recv(tmp->fd, &c, 1, MSG_OOB);
-					if (r < 1)
-						SHUT(tmp->fd);
+				r = recv(tmp->fd, &c, 1, MSG_OOB);
+				if (r < 1)
+					SHUT(tmp->fd);
 
-					printf("oob?\n");
+				printf("oob?\n");
+			}
+
+			/* Check read. */
+			if (tmp->fd >= 0 && FD_ISSET(tmp->fd, &rd)) {
+				r = read(tmp->fd, tmp->in, BUF_SIZE);
+				if (r < 1)
+					SHUT(tmp->fd);
+				else
+				{
+					tmp->in_len = r;
+					handle_input(tmp, &myclient);
 				}
+			}
 
-				/* Check read. */
-				if (FD_ISSET(tmp->fd, &rd)) {
-					r = read(tmp->fd, tmp->in, BUF_SIZE);
-					if (r < 1)
-						SHUT(tmp->fd);
-					else
-					{
-						tmp->in_len = r;
-						handle_input(tmp, &myclient);
-					}
-				}
+			/* Check write. */
+			if (tmp->fd >= 0 && FD_ISSET(tmp->fd, &wr)) {
+				r = write(tmp->fd, tmp->out, tmp->out_len);
+				if (r < 1)
+					SHUT(tmp->fd);
 
-				/* Check write. */
-				if (FD_ISSET(tmp->fd, &wr)) {
-					r = write(tmp->fd, tmp->out, tmp->out_len);
-					if (r < 1)
-						SHUT(tmp->fd);
-
-					tmp->out_len = 0;
-					tmp->out[0] = '\0';
-				}
-
+				tmp->out_len = 0;
+				tmp->out[0] = '\0';
 			}
 		}
 	}
