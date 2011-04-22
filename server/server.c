@@ -47,6 +47,24 @@ static int listen_socket(int listen_port)
 	return s;
 }
 
+static int accept_client(int socket)
+{
+	unsigned int l = 0;
+	struct sockaddr_in client_address = {0};
+	int r = 0;
+
+	memset(&client_address, 0, l = sizeof(client_address));
+	r = accept(socket, (struct sockaddr *) &client_address, &l);
+	if (r == -1) {
+		perror("accept()");
+	}
+
+	printf("connect from %d %s\n", r,
+			inet_ntoa(client_address.sin_addr));
+
+	return r;
+}
+
 #define SHUT(x) do {                \
 	if ((x) >= 0) {                 \
 		shutdown((x), SHUT_RDWR);   \
@@ -96,9 +114,6 @@ int handle_input(struct client *client, struct client *client_list)
 			}
 
 			client->in_len = 0;
-
-			//memcpy(client->out, "\0hi \xff", 5);
-			//client->out_len = 5;
 		}
 	}
 	else
@@ -185,7 +200,7 @@ int handle_input(struct client *client, struct client *client_list)
 
 int main(int argc, char **argv)
 {
-	int h = -1;
+	int socket = -1;
 	struct client *tmp = NULL;
 	struct list_head *pos = NULL, *q = NULL;
 
@@ -194,8 +209,8 @@ int main(int argc, char **argv)
 
 	signal(SIGPIPE, SIG_IGN);
 
-	h = listen_socket(9999);
-	if (h == -1)
+	socket = listen_socket(9999);
+	if (socket == -1)
 		exit(EXIT_FAILURE);
 
 	for (;;) {
@@ -205,9 +220,10 @@ int main(int argc, char **argv)
 		FD_ZERO(&rd);
 		FD_ZERO(&wr);
 		FD_ZERO(&er);
-		FD_SET(h, &rd);
-		nfds = max(nfds, h);
+		FD_SET(socket, &rd);
+		nfds = max(nfds, socket);
 
+		/* Build up the fd_sets for select. */
 		list_for_each_entry(tmp, &myclient.list, list)
 		{
 			if (tmp->fd >= 0)
@@ -217,7 +233,8 @@ int main(int argc, char **argv)
 				if (tmp->out_len > 0)
 				{
 					FD_SET(tmp->fd, &wr);
-					printf("fd=%d len=%d good for writing!\n", tmp->fd, tmp->out_len);
+					printf("fd=%d len=%d good for writing!\n",
+							tmp->fd, tmp->out_len);
 				}
 				nfds = max(nfds, tmp->fd);
 			}
@@ -233,24 +250,17 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 
-		if (FD_ISSET(h, &rd)) {
-			unsigned int l;
-			struct sockaddr_in client_address;
+		if (FD_ISSET(socket, &rd)) {
+			r = accept_client(socket);
 
-			memset(&client_address, 0, l = sizeof(client_address));
-			r = accept(h, (struct sockaddr *) &client_address, &l);
-			if (r == -1) {
-				perror("accept()");
-			} else {
+			if (r != -1)
+			{
 				struct client *tmp = calloc(1, sizeof(struct client));
 
 				tmp->fd = r;
 
 				printf("adding client %p fd=%d\n", tmp, tmp->fd);
 				list_add_tail(&(tmp->list), &(myclient.list));
-
-				printf("connect from %d %s\n", r,
-						inet_ntoa(client_address.sin_addr));
 			}
 		}
 
@@ -271,7 +281,9 @@ int main(int argc, char **argv)
 			if (tmp->fd >= 0 && FD_ISSET(tmp->fd, &rd)) {
 				r = read(tmp->fd, tmp->in, BUF_SIZE);
 				if (r < 1)
+				{
 					SHUT(tmp->fd);
+				}
 				else
 				{
 					tmp->in_len = r;
