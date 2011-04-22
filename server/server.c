@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "list.h"
 
@@ -105,6 +106,7 @@ int handle_input(struct client *client, struct client *client_list)
 		/* Send the response. */
 		char *p = NULL, *start = NULL;
 		char *key1 = NULL, *key2 = NULL, *key3 = NULL;
+		char *origin = NULL;
 		char response[16] = {0};
 		int i = 0;
 
@@ -139,6 +141,12 @@ int handle_input(struct client *client, struct client *client_list)
 				start += strlen("Sec-WebSocket-Key2: ");
 				key2 = strdup(start);
 			}
+			else if ( strncmp(start, "Origin: ",
+						strlen("Origin: ")) == 0 )
+			{
+				start += strlen("Origin: ");
+				origin = strdup(start);
+			}
 
 			start = p;
 		}
@@ -146,18 +154,23 @@ int handle_input(struct client *client, struct client *client_list)
 		if (p)
 			key3 = strdup(p);
 
+		assert(key1);
+		assert(key2);
+		assert(key3);
+		assert(origin);
+
 		compute_response(key1, key2, key3, response);
 
 		client->out_len = snprintf(client->out, BUF_SIZE,
 				"HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
 				"Upgrade: WebSocket\r\n"
 				"Connection: Upgrade\r\n"
-				"Sec-WebSocket-Origin: null\r\n"
+				"Sec-WebSocket-Origin: %s\r\n"
 				"Sec-WebSocket-Location: ws://localhost:9999/\r\n"
 				"Access-Control-Allow-Origin: null\r\n"
 				"Access-Control-Allow-Credentials: true\r\n"
 				"Access-Control-Allow-Headers: content-type\r\n"
-				"\r\n");
+				"\r\n", origin);
 
 		for (i = 0; i < 16; i++)
 			client->out[client->out_len++] = response[i];
