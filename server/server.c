@@ -1,162 +1,284 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <string.h>
-#include <ctype.h>
-#include <assert.h>
+#include <signal.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <errno.h>
 
-#include "md5.h"
+#include "list.h"
 
-/*
-GET / HTTP/1.1
-Upgrade: WebSocket
-Connection: Upgrade
-Host: echo.websocket.org
-Origin: null
-Sec-WebSocket-Key1: 30  ;- 5=5 u 4 1  7336
-Sec-WebSocket-Key2: :2 8 G(  07A 93Ql 3 *20 Ox0G'w
+#include "key.h"
 
-]..g...uHTTP/1.1 101 Web Socket Protocol Handshake
-Upgrade: WebSocket
-Connection: Upgrade
-Sec-WebSocket-Origin: null
-Sec-WebSocket-Location: ws://echo.websocket.org/
-Server: Kaazing Gateway
-Date: Thu, 21 Apr 2011 21:43:59 GMT
-Access-Control-Allow-Origin: null
-Access-Control-Allow-Credentials: true
-Access-Control-Allow-Headers: content-type
+#define max(x,y) ((x) > (y) ? (x) : (y))
 
-..*..........`...WebSocket rocks..WebSocket rocks.
-*/
-
-
-/*
-00000000  47 45 54 20 2f 20 48 54  54 50 2f 31 2e 31 0d 0a GET / HT TP/1.1..
-00000010  55 70 67 72 61 64 65 3a  20 57 65 62 53 6f 63 6b Upgrade:  WebSock
-00000020  65 74 0d 0a 43 6f 6e 6e  65 63 74 69 6f 6e 3a 20 et..Conn ection: 
-00000030  55 70 67 72 61 64 65 0d  0a 48 6f 73 74 3a 20 65 Upgrade. .Host: e
-00000040  63 68 6f 2e 77 65 62 73  6f 63 6b 65 74 2e 6f 72 cho.webs ocket.or
-00000050  67 0d 0a 4f 72 69 67 69  6e 3a 20 6e 75 6c 6c 0d g..Origi n: null.
-00000060  0a 53 65 63 2d 57 65 62  53 6f 63 6b 65 74 2d 4b .Sec-Web Socket-K
-00000070  65 79 31 3a 20 33 30 20  20 3b 2d 20 35 3d 35 20 ey1: 30   ;- 5=5 
-00000080  75 20 34 20 31 20 20 37  33 33 36 0d 0a 53 65 63 u 4 1  7 336..Sec
-00000090  2d 57 65 62 53 6f 63 6b  65 74 2d 4b 65 79 32 3a -WebSock et-Key2:
-000000A0  20 3a 32 20 38 20 47 28  20 20 30 37 41 20 39 33  :2 8 G(   07A 93
-000000B0  51 6c 20 33 20 2a 32 30  20 4f 78 30 47 27 77 0d Ql 3 *20  Ox0G'w.
-000000C0  0a 0d 0a 5d 9f b0 67 0f  e4 fa 75                ...]..g. ..u
-    00000000  48 54 54 50 2f 31 2e 31  20 31 30 31 20 57 65 62 HTTP/1.1  101 Web
-    00000010  20 53 6f 63 6b 65 74 20  50 72 6f 74 6f 63 6f 6c  Socket  Protocol
-    00000020  20 48 61 6e 64 73 68 61  6b 65 0d 0a 55 70 67 72  Handsha ke..Upgr
-    00000030  61 64 65 3a 20 57 65 62  53 6f 63 6b 65 74 0d 0a ade: Web Socket..
-    00000040  43 6f 6e 6e 65 63 74 69  6f 6e 3a 20 55 70 67 72 Connecti on: Upgr
-    00000050  61 64 65 0d 0a 53 65 63  2d 57 65 62 53 6f 63 6b ade..Sec -WebSock
-    00000060  65 74 2d 4f 72 69 67 69  6e 3a 20 6e 75 6c 6c 0d et-Origi n: null.
-    00000070  0a 53 65 63 2d 57 65 62  53 6f 63 6b 65 74 2d 4c .Sec-Web Socket-L
-    00000080  6f 63 61 74 69 6f 6e 3a  20 77 73 3a 2f 2f 65 63 ocation:  ws://ec
-    00000090  68 6f 2e 77 65 62 73 6f  63 6b 65 74 2e 6f 72 67 ho.webso cket.org
-    000000A0  2f 0d 0a 53 65 72 76 65  72 3a 20 4b 61 61 7a 69 /..Serve r: Kaazi
-    000000B0  6e 67 20 47 61 74 65 77  61 79 0d 0a 44 61 74 65 ng Gatew ay..Date
-    000000C0  3a 20 54 68 75 2c 20 32  31 20 41 70 72 20 32 30 : Thu, 2 1 Apr 20
-    000000D0  31 31 20 32 31 3a 34 33  3a 35 39 20 47 4d 54 0d 11 21:43 :59 GMT.
-    000000E0  0a 41 63 63 65 73 73 2d  43 6f 6e 74 72 6f 6c 2d .Access- Control-
-    000000F0  41 6c 6c 6f 77 2d 4f 72  69 67 69 6e 3a 20 6e 75 Allow-Or igin: nu
-    00000100  6c 6c 0d 0a 41 63 63 65  73 73 2d 43 6f 6e 74 72 ll..Acce ss-Contr
-    00000110  6f 6c 2d 41 6c 6c 6f 77  2d 43 72 65 64 65 6e 74 ol-Allow -Credent
-    00000120  69 61 6c 73 3a 20 74 72  75 65 0d 0a 41 63 63 65 ials: tr ue..Acce
-    00000130  73 73 2d 43 6f 6e 74 72  6f 6c 2d 41 6c 6c 6f 77 ss-Contr ol-Allow
-    00000140  2d 48 65 61 64 65 72 73  3a 20 63 6f 6e 74 65 6e -Headers : conten
-    00000150  74 2d 74 79 70 65 0d 0a  0d 0a                   t-type.. ..
-    0000015A  b6 bc 2a 9e a0 0c 1c b9  0f ad dc 97 90 60 17 a8 ..*..... .....`..
-000000CB  00 57 65 62 53 6f 63 6b  65 74 20 72 6f 63 6b 73 .WebSock et rocks
-000000DB  ff                                               .
-    0000016A  00 57 65 62 53 6f 63 6b  65 74 20 72 6f 63 6b 73 .WebSock et rocks
-    0000017A  ff                                               .
-*/
-
-/* Decodes a WebSocket key into its big endian value. */
-unsigned int decode(const char *key)
+static int listen_socket(int listen_port)
 {
-	const char *p = key;
-	unsigned int key_number = 0;
-	unsigned int spaces = 0;
+	struct sockaddr_in a;
+	int s;
+	int yes;
 
-	while (*p)
+	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+		perror("socket");
+		return -1;
+	}
+	yes = 1;
+	if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR,
+				(char *) &yes, sizeof(yes)) == -1) {
+		perror("setsockopt");
+		close(s);
+		return -1;
+	}
+	memset(&a, 0, sizeof(a));
+	a.sin_port = htons(listen_port);
+	a.sin_family = AF_INET;
+	if (bind(s, (struct sockaddr *) &a, sizeof(a)) == -1) {
+		perror("bind");
+		close(s);
+		return -1;
+	}
+	printf("accepting connections on port %d\n", listen_port);
+	listen(s, 10);
+	return s;
+}
+
+#define SHUT(x) do {                \
+	if ((x) >= 0) {                 \
+		shutdown((x), SHUT_RDWR);   \
+		close((x));                 \
+		printf("closing " # x "\n");\
+		(x) = -1;                   \
+	}                               \
+} while (0)
+
+#define BUF_SIZE 4096
+
+struct client
+{
+	int fd;
+	char in[BUF_SIZE];
+	int in_len;
+	char out[BUF_SIZE];
+	int out_len;
+
+	int finished_headers;
+
+	struct list_head list;
+};
+
+int handle_input(struct client *client, struct client *client_list)
+{
+	struct client *tmp = NULL;
+
+	if (client->finished_headers)
 	{
-		if (isdigit(*p))
-			key_number = key_number*10 + *p-'0';
-		if (*p == ' ')
-			spaces++;
-		p++;
+		/* Relay any data to other clients. */
+
+		if (client->in_len > 0)
+		{
+			client->in[client->in_len-1] = '\0';
+			printf("fd=%d is relaying: %d %s\n", client->fd, client->in_len, client->in+1);
+			client->in[client->in_len-1] = '\xff';
+
+			list_for_each_entry(tmp, &client_list->list, list)
+			{
+				if (tmp->fd != client->fd)
+				{
+					memcpy(tmp->out, client->in, client->in_len);
+					tmp->out_len = client->in_len;
+					printf("fd=%d len=%d\n", tmp->fd, tmp->out_len);
+				}
+			}
+
+			client->in_len = 0;
+
+			//memcpy(client->out, "\0hi \xff", 5);
+			//client->out_len = 5;
+		}
+	}
+	else
+	{
+		/* Send the response. */
+		char *p = NULL, *start = NULL;
+		char *key1 = NULL, *key2 = NULL, *key3 = NULL;
+		char response[16] = {0};
+		int i = 0;
+
+		start = client->in;
+		while (*start)
+		{
+			p = strchr(start, '\r');
+
+			if (p)
+			{
+				*p++ = '\0'; /* remove \r */
+				*p++ = '\0'; /* remove \n */
+
+				/* We are at the blank line, the rest is data. */
+				if (start == p-2)
+					break;
+			}
+			else
+			{
+				break;
+			}
+
+			if ( strncmp(start, "Sec-WebSocket-Key1",
+						strlen("Sec-WebSocket-Key1")) == 0 )
+			{
+				start += strlen("Sec-WebSocket-Key1: ");
+				key1 = strdup(start);
+			}
+			else if ( strncmp(start, "Sec-WebSocket-Key2",
+						strlen("Sec-WebSocket-Key2")) == 0 )
+			{
+				start += strlen("Sec-WebSocket-Key2: ");
+				key2 = strdup(start);
+			}
+
+			start = p;
+		}
+
+		if (p)
+			key3 = strdup(p);
+
+		compute_response(key1, key2, key3, response);
+
+		client->out_len = snprintf(client->out, BUF_SIZE,
+				"HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
+				"Upgrade: WebSocket\r\n"
+				"Connection: Upgrade\r\n"
+				"Sec-WebSocket-Origin: null\r\n"
+				"Sec-WebSocket-Location: ws://localhost:9999/\r\n"
+				"Access-Control-Allow-Origin: null\r\n"
+				"Access-Control-Allow-Credentials: true\r\n"
+				"Access-Control-Allow-Headers: content-type\r\n"
+				"\r\n");
+
+		for (i = 0; i < 16; i++)
+			client->out[client->out_len++] = response[i];
+
+		client->out[client->out_len] = '\0';
+
+		client->finished_headers = 1;
 	}
 
-	assert(spaces > 0);
-
-	return ntohl(key_number / spaces);
-}
-
-/* Computes the server's response based on the three keys. The response is
- * stored in response which should be 16 bytes in length. */
-void compute_response(const char *key1, const char *key2, const char *key3,
-		char *response)
-{
-	unsigned int key_number_1 = 0;
-	unsigned int key_number_2 = 0;
-	char key[16] = {0};
-	MD5_CTX mdContext;
-
-	assert(key1);
-	assert(key2);
-	assert(key3);
-	assert(response);
-
-	key_number_1 = decode(key1);
-	key_number_2 = decode(key2);
-
-	memcpy(key  , &key_number_1, 4);
-	memcpy(key+4, &key_number_2, 4);
-	memcpy(key+8, key3,          8);
-
-	MD5Init(&mdContext);
-	MD5Update(&mdContext, key, 16);
-	MD5Final(&mdContext);
-
-	memcpy(response, mdContext.digest, 16);
-}
-
-void dprint(const char *data, int length)
-{
-	int i = 0;
-
-	for (i = 0; i < length; i++)
-		printf("%02x ", data[i]&0xff);
-	printf("\n");
-}
-
-int main()
-{
-	char response[16] = {0};
-
-	compute_response(
-			"18x 6]8vM;54 *(5:  {   U1]8  z [  8",
-			"1_ tx7X d  <  nw  334J702) 7]o}` 0",
-			"Tm[K T2u",
-			response);
-	assert( memcmp(response, "fQJ,fN/4F4!~K~MH", 16) == 0 );
-
-	compute_response(
-			"3e6b263  4 17 80",
-			"17  9 G`ZD9   2 2b 7X 3 /r90",
-			"WjN}|M(6",
-			response);
-	assert( memcmp(response, "n`9eBk9z$R8pOtVb", 16) == 0 );
-
-	compute_response(
-			"30  ;- 5=5 u 4 1  7336",
-			":2 8 G(  07A 93Ql 3 *20 Ox0G'w",
-			"\x5d\x9f\xb0\x67\x0f\xe4\xfa\x75",
-			response);
-	assert( memcmp(response, "\xb6\xbc\x2a\x9e\xa0\x0c\x1c\xb9\x0f\xad\xdc\x97\x90\x60\x17\xa8", 16) == 0 );
-
 	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	int h = -1;
+	struct client *tmp = NULL;
+
+	struct client myclient;
+	INIT_LIST_HEAD(&myclient.list);
+
+	signal(SIGPIPE, SIG_IGN);
+
+	h = listen_socket(9999);
+	if (h == -1)
+		exit(EXIT_FAILURE);
+
+	for (;;) {
+		int r, nfds = 0;
+		fd_set rd, wr, er;
+
+		FD_ZERO(&rd);
+		FD_ZERO(&wr);
+		FD_ZERO(&er);
+		FD_SET(h, &rd);
+		nfds = max(nfds, h);
+
+		list_for_each_entry(tmp, &myclient.list, list)
+		{
+			if (tmp->fd >= 0)
+			{
+				FD_SET(tmp->fd, &rd);
+				FD_SET(tmp->fd, &er);
+				if (tmp->out_len > 0)
+				{
+					FD_SET(tmp->fd, &wr);
+					printf("fd=%d len=%d good for writing!\n", tmp->fd, tmp->out_len);
+				}
+				nfds = max(nfds, tmp->fd);
+			}
+		}
+
+		r = select(nfds + 1, &rd, &wr, &er, NULL);
+
+		if (r == -1 && errno == EINTR)
+			continue;
+
+		if (r == -1) {
+			perror("select()");
+			exit(EXIT_FAILURE);
+		}
+
+		if (FD_ISSET(h, &rd)) {
+			unsigned int l;
+			struct sockaddr_in client_address;
+
+			memset(&client_address, 0, l = sizeof(client_address));
+			r = accept(h, (struct sockaddr *) &client_address, &l);
+			if (r == -1) {
+				perror("accept()");
+			} else {
+				struct client *tmp = calloc(1, sizeof(struct client));
+
+				tmp->fd = r;
+
+				list_add_tail(&(tmp->list), &(myclient.list));
+
+				printf("connect from %d %s\n", r,
+						inet_ntoa(client_address.sin_addr));
+			}
+		}
+
+		list_for_each_entry(tmp, &myclient.list, list)
+		{
+			if (tmp->fd >= 0)
+			{
+				/* Check error. */
+				if (FD_ISSET(tmp->fd, &er)) {
+					char c;
+
+					r = recv(tmp->fd, &c, 1, MSG_OOB);
+					if (r < 1)
+						SHUT(tmp->fd);
+
+					printf("oob?\n");
+				}
+
+				/* Check read. */
+				if (FD_ISSET(tmp->fd, &rd)) {
+					r = read(tmp->fd, tmp->in, BUF_SIZE);
+					if (r < 1)
+						SHUT(tmp->fd);
+					else
+					{
+						tmp->in_len = r;
+						handle_input(tmp, &myclient);
+					}
+				}
+
+				/* Check write. */
+				if (FD_ISSET(tmp->fd, &wr)) {
+					r = write(tmp->fd, tmp->out, tmp->out_len);
+					if (r < 1)
+						SHUT(tmp->fd);
+
+					tmp->out_len = 0;
+					tmp->out[0] = '\0';
+				}
+
+			}
+		}
+	}
+
+	exit(EXIT_SUCCESS);
 }

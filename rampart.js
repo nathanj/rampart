@@ -3,6 +3,8 @@ var a;
 var c;
 var cannonballs = new Array();
 
+var wsUri = "ws://localhost:9999/";
+var output;
 
 var width=40
 var height=30
@@ -141,7 +143,17 @@ function fireCannonball(e)
 {
 	var pos = getCursorPosition(e);
 
+	websocket.send(pos.x + "," + pos.y);
+
 	var cb = new Cannonball(30, 30, pos.x, pos.y);
+	cannonballs.push(cb);
+
+	draw();
+}
+
+function fireCannonball2(pos)
+{
+	var cb = new Cannonball(600, 30, pos.x, pos.y);
 	cannonballs.push(cb);
 
 	draw();
@@ -185,6 +197,42 @@ function init()
 	setInterval(update, 50);
 
 	draw();
+
+	output = document.getElementById("output");
+
+	websocket = new WebSocket(wsUri);
+	websocket.onopen = function(evt) { onOpen(evt) };
+	websocket.onclose = function(evt) { onClose(evt) };
+	websocket.onmessage = function(evt) { onMessage(evt) };
+	websocket.onerror = function(evt) { onError(evt) };
+
+	websocket.send("hello");
+}
+
+function onOpen(evt) {
+	writeToScreen("CONNECTED");
+}
+function onClose(evt) {
+	writeToScreen("DISCONNECTED");
+}
+function onMessage(evt) {
+	writeToScreen('<span style="color: blue; "> ANOTHER PLAYER SHOOTS AT: ' + evt.data+'</span> ');
+	var pos = evt.data.split(',');
+	pos = new Cell(parseInt(pos[0]), parseInt(pos[1]));
+	fireCannonball2(pos);
+}
+function onError(evt) {
+	writeToScreen('<span style="color: red; "> ERROR:</span> ' + evt.data);
+}
+function doSend(message) {
+	writeToScreen("SENT: " + message);
+	websocket.send(message);
+}
+function writeToScreen(message) {
+	var pre = document.createElement("p");
+	pre.style.wordWrap = "break-word";
+	pre.innerHTML = message;
+	output.appendChild(pre);
 }
 
 function update() {
