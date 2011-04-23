@@ -2,12 +2,58 @@
 var a;
 var c;
 var cannonballs = new Array();
+var cannons = new Array();
 
 var wsUri = "ws://localhost:9999/";
 var output;
 
+var oldcursor = "";
+
 var width=40
 var height=30
+
+var player = 1;
+
+var state = 0;
+var state_timer = 0;
+var next_state_change = 0;
+var state_div;
+
+var cannons_left = 2;
+
+var player_mask =
+[
+[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0],
+[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+]
 
 var board =
 [
@@ -31,7 +77,7 @@ var board =
 [0,0,0,1,1,1,4,4,1,4,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,4,1,1,1,1,4,1,1,1,0,0,0],
 [0,0,0,1,4,4,4,1,4,4,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,4,1,1,1,1,4,1,1,1,0,0,0],
 [0,0,0,1,4,1,1,4,4,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,4,1,1,1,1,4,1,1,1,0,0,0],
-[0,0,0,1,4,1,3,4,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,4,1,2,1,1,4,1,1,1,0,0,0],
+[0,0,0,1,4,1,1,4,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,4,1,2,1,1,4,1,1,1,0,0,0],
 [0,0,0,1,4,1,1,4,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,4,1,1,1,1,4,1,1,1,0,0,0],
 [0,0,0,1,4,1,1,4,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,4,1,1,1,1,4,1,1,1,0,0,0],
 [0,0,0,1,4,1,2,4,1,1,1,1,1,1,2,1,1,1,1,1,1,0,0,0,0,1,1,1,4,1,1,1,1,4,1,1,1,0,0,0],
@@ -130,11 +176,44 @@ function makeWall(e)
 	var y = parseInt(pos.y/16);
 	var x = parseInt(pos.x/16);
 
-	// If wall, set to burn
-	if (board[y][x] == 4)
-		board[y][x] = 5;
-	else
+	if (player_mask[y][x] == player)
+	{
+		websocket.send('wall ' + x + "," + y);
+
 		board[y][x] = 4;
+
+		draw();
+	}
+}
+
+function makeCannon(e)
+{
+	var pos = getCursorPosition(e);
+
+	var y = parseInt(pos.y/16);
+	var x = parseInt(pos.x/16);
+
+	if (cannons_left > 0 && player_mask[y][x] == player && board[y][x] == CLOSED)
+	{
+		websocket.send('cannon ' + x + "," + y);
+
+		cannons.push(new Cannon(x, y));
+		cannons_left--;
+
+		draw();
+	}
+}
+
+function makeCannon2(pos)
+{
+	cannons.push(new Cannon(pos.x, pos.y));
+
+	draw();
+}
+
+function makeWall2(pos)
+{
+	board[pos.y][pos.x] = 4;
 
 	draw();
 }
@@ -143,17 +222,31 @@ function fireCannonball(e)
 {
 	var pos = getCursorPosition(e);
 
-	websocket.send(pos.x + "," + pos.y);
+	var l = cannons.length;
+	for (var i = 0; i < l; i++)
+	{
+		var c = cannons[i];
+		if (player_mask[c.y][c.x] == player && board[c.y][c.x] == CLOSED)
+		{
+			if (c.fire_timer == 0)
+			{
+				var cb = new Cannonball(c.x*16, c.y*16, pos.x, pos.y);
+				cannonballs.push(cb);
+				c.fire_timer = 20*2;
 
-	var cb = new Cannonball(30, 30, pos.x, pos.y);
-	cannonballs.push(cb);
+				websocket.send('cannonball ' + c.x*16 + "," + c.y*16 + "," + pos.x + "," + pos.y);
+
+				break;
+			}
+		}
+	}
 
 	draw();
 }
 
-function fireCannonball2(pos)
+function fireCannonball2(from, to)
 {
-	var cb = new Cannonball(600, 30, pos.x, pos.y);
+	var cb = new Cannonball(from.x, from.y, to.x, to.y);
 	cannonballs.push(cb);
 
 	draw();
@@ -161,10 +254,12 @@ function fireCannonball2(pos)
 
 function onClick(e)
 {
-	if (ctrl)
+	if (state == 2)
 		fireCannonball(e);
-	else
+	else if (state == 0)
 		makeWall(e);
+	else if (state == 1)
+		makeCannon(e);
 }
 
 function doKeyDown(e)
@@ -185,6 +280,20 @@ function doKeyUp(e)
 	}
 }
 
+function printState()
+{
+	var secs = Math.min(next_state_change/20, parseInt((next_state_change - state_timer) / 20) + 1);
+
+	if (state == 0)
+		state_div.innerHTML = "State: Placing Walls ("+secs+" seconds)";
+	else if (state == 1)
+		state_div.innerHTML = "State: Placing Cannons ("+secs+" seconds)";
+	else if (state == 2)
+		state_div.innerHTML = "State: Shooting Cannonballs ("+secs+" seconds)";
+	else if (state == 3)
+		state_div.innerHTML = "State: In between states ("+secs+" seconds)";
+}
+
 function init()
 {
 	a = document.getElementById("a");
@@ -192,34 +301,71 @@ function init()
 	window.addEventListener('keydown', doKeyDown, false);
 	window.addEventListener('keyup', doKeyUp, false);
 
+
 	c = a.getContext("2d");
 
 	setInterval(update, 50);
 
+	output = document.getElementById("output");
+	state_div = document.getElementById("state");
+	state_div.innerHTML = "whee";
+
+
 	draw();
 
-	output = document.getElementById("output");
+	state = 0;
+	next_state_change = 20*10;
+	state_timer = 0;
 
 	websocket = new WebSocket(wsUri);
 	websocket.onopen = function(evt) { onOpen(evt) };
 	websocket.onclose = function(evt) { onClose(evt) };
 	websocket.onmessage = function(evt) { onMessage(evt) };
 	websocket.onerror = function(evt) { onError(evt) };
-
-	websocket.send("hello");
 }
 
 function onOpen(evt) {
 	writeToScreen("CONNECTED");
+
+	doSend('join game');
 }
 function onClose(evt) {
 	writeToScreen("DISCONNECTED");
 }
 function onMessage(evt) {
-	writeToScreen('<span style="color: blue; "> ANOTHER PLAYER SHOOTS AT: ' + evt.data+'</span> ');
-	var pos = evt.data.split(',');
-	pos = new Cell(parseInt(pos[0]), parseInt(pos[1]));
-	fireCannonball2(pos);
+	var m = null;
+	var from = null;
+	var to = null;
+	var pos = null;
+
+	if ( (m = evt.data.match(/cannonball (\d+),(\d+),(\d+),(\d+)/)) )
+	{
+		writeToScreen('<span style="color: blue; "> ANOTHER PLAYER SHOOTS AT: ' + evt.data+'</span> ');
+		from = new Cell(parseInt(m[1]), parseInt(m[2]));
+		to = new Cell(parseInt(m[3]), parseInt(m[4]));
+		fireCannonball2(from, to);
+	}
+	else if ( (m = evt.data.match(/wall (\d+),(\d+)/)) )
+	{
+		writeToScreen('<span style="color: blue; "> ANOTHER PLAYER WALLS: ' + evt.data+'</span> ');
+		pos = new Cell(parseInt(m[1]), parseInt(m[2]));
+		makeWall2(pos);
+	}
+	else if ( (m = evt.data.match(/cannon (\d+),(\d+)/)) )
+	{
+		writeToScreen('<span style="color: blue; "> ANOTHER PLAYER CANNONS: ' + evt.data+'</span> ');
+		pos = new Cell(parseInt(m[1]), parseInt(m[2]));
+		makeCannon2(pos);
+	}
+	else if ( (m = evt.data.match(/player (\d+)/)) )
+	{
+		writeToScreen('<span style="color: blue; "> YOU ARE PLAYER: ' + evt.data+'</span> ');
+		player = parseInt(m[1]);
+	}
+	else
+	{
+		writeToScreen('<span style="color: red; "> UNKNOWN MESSAGE: ' + evt.data+'</span> ');
+	}
 }
 function onError(evt) {
 	writeToScreen('<span style="color: red; "> ERROR:</span> ' + evt.data);
@@ -235,9 +381,28 @@ function writeToScreen(message) {
 	output.appendChild(pre);
 }
 
+function switchState() {
+	state_timer = 0;
+
+	state = [1,2,0][state];
+
+	cannons_left = 2;
+}
+
 function update() {
 
-	var l = cannonballs.length;
+	state_timer++;
+	if (state_timer >= next_state_change)
+		switchState();
+
+	var l = cannons.length;
+	for (var i = 0; i < l; i++)
+	{
+		if (cannons[i].fire_timer > 0)
+			cannons[i].fire_timer--;
+	}
+
+	l = cannonballs.length;
 	for (var i = 0; i < l; i++)
 	{
 		var cb = cannonballs[i];
@@ -261,7 +426,8 @@ function update() {
 
 function draw() {
 
-figureOutProperty();
+	printState();
+	figureOutProperty();
 
 	for (var i = 0; i < 40; i++)
 		for (var j = 0; j < 30; j++)
@@ -272,8 +438,6 @@ figureOutProperty();
 				drawGrass(i, j);
 			else if (board[j][i] == 2)
 				drawCastle(i, j);
-			else if (board[j][i] == 3)
-				drawCannon(i, j);
 			else if (board[j][i] == 4)
 				drawWall(i, j);
 			else if (board[j][i] == 5)
@@ -284,12 +448,23 @@ figureOutProperty();
 				drawProperty(i, j);
 		}
 
+	drawCannons();
 	drawCannonballs();
 }
 
 function square(x)
 {
 	return x*x;
+}
+
+function drawCannons()
+{
+	var l = cannons.length;
+	for (var i = 0; i < l; i++)
+	{
+		var cb = cannons[i];
+		drawCannon(cb.x, cb.y);
+	}
 }
 
 function drawCannonballs()
@@ -313,6 +488,12 @@ function drawCannonballs()
 			c.fill();
 		}
 	}
+}
+
+function Cannon(x, y) {
+	this.x = x;
+	this.y = y;
+	this.fire_timer = 0;
 }
 
 function Cannonball(start_x, start_y, end_x, end_y) {
@@ -364,7 +545,6 @@ function getCursorPosition(e) {
 }
 
 function drawCannon(x, y) {
-	drawGrass(x,y);
 	c.beginPath();
 	c.arc(x*16+8, y*16+8, 8, 0, Math.PI*2, false);
 	c.closePath();
@@ -399,9 +579,9 @@ function drawGrass(x, y) {
 
 function drawProperty(x, y) {
 	if ((x + y) % 2 == 0)
-		c.fillStyle = "#33b";
+		c.fillStyle = player_mask[y][x] == 1 ? "#33b" : "#b33";
 	else
-		c.fillStyle = "#66b";
+		c.fillStyle = player_mask[y][x] == 1 ? "#66b" : "#b66";
 	c.fillRect(x*16, y*16, 16, 16);
 }
 

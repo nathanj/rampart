@@ -95,7 +95,7 @@ int handle_input(struct client *client, struct client *client_list)
 
 	if (client->finished_headers)
 	{
-		/* Relay any data to other clients. */
+		/* Handle game messages. */
 
 		if (client->in_len > 0)
 		{
@@ -103,13 +103,25 @@ int handle_input(struct client *client, struct client *client_list)
 			printf("fd=%d is relaying: %d %s\n", client->fd, client->in_len, client->in+1);
 			client->in[client->in_len-1] = '\xff';
 
-			list_for_each_entry(other, &client_list->list, list)
+			if (strncmp(client->in+1, "join ", strlen("join ")) == 0)
 			{
-				if (other->fd != client->fd)
+				client->out[0] = '\0';
+				client->out_len = 1;
+				client->out_len += snprintf(client->out+1, BUF_SIZE,
+						"player %d\xff", client->fd-3);
+			}
+			else
+			{
+				/* Standard game message. Relay to other clients. */
+
+				list_for_each_entry(other, &client_list->list, list)
 				{
-					memcpy(other->out, client->in, client->in_len);
-					other->out_len = client->in_len;
-					printf("fd=%d len=%d\n", other->fd, other->out_len);
+					if (other->fd != client->fd)
+					{
+						memcpy(other->out, client->in, client->in_len);
+						other->out_len = client->in_len;
+						printf("fd=%d len=%d\n", other->fd, other->out_len);
+					}
 				}
 			}
 
