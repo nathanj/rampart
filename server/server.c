@@ -91,7 +91,7 @@ struct client
 	struct list_head list;
 };
 
-int handle_input(struct client *client, struct client *client_list)
+int handle_input(struct client *client, struct list_head *client_list)
 {
 	struct client *other = NULL;
 
@@ -114,7 +114,7 @@ int handle_input(struct client *client, struct client *client_list)
 
 				/* Figure out this client's player number. */
 again:
-				list_for_each_entry(other, &client_list->list, list)
+				list_for_each_entry(other, client_list, list)
 				{
 					if (client->fd != other->fd
 							&& strcmp(client->game, other->game) == 0
@@ -138,7 +138,7 @@ again:
 				/* Standard game message. Relay to other clients of the same
 				 * game. */
 
-				list_for_each_entry(other, &client_list->list, list)
+				list_for_each_entry(other, client_list, list)
 				{
 					if (client->fd != other->fd
 							&& strcmp(client->game, other->game) == 0)
@@ -249,8 +249,7 @@ int main(int argc, char **argv)
 	struct client *client = NULL;
 	struct list_head *pos = NULL, *q = NULL;
 
-	struct client client_list;
-	INIT_LIST_HEAD(&client_list.list);
+	LIST_HEAD(client_list);
 
 	signal(SIGPIPE, SIG_IGN);
 
@@ -269,7 +268,7 @@ int main(int argc, char **argv)
 		nfds = max(nfds, socket);
 
 		/* Build up the fd_sets for select. */
-		list_for_each_entry(client, &client_list.list, list)
+		list_for_each_entry(client, &client_list, list)
 		{
 			if (client->fd >= 0)
 			{
@@ -305,11 +304,11 @@ int main(int argc, char **argv)
 				client->fd = r;
 
 				printf("adding client %p fd=%d\n", client, client->fd);
-				list_add_tail(&(client->list), &(client_list.list));
+				list_add_tail(&(client->list), &client_list);
 			}
 		}
 
-		list_for_each_entry(client, &client_list.list, list)
+		list_for_each_entry(client, &client_list, list)
 		{
 			/* Check error. */
 			if (client->fd >= 0 && FD_ISSET(client->fd, &er)) {
@@ -348,7 +347,7 @@ int main(int argc, char **argv)
 		}
 
 		/* Delete all clients which no longer have an open socket. */
-		list_for_each_safe(pos, q, &client_list.list)
+		list_for_each_safe(pos, q, &client_list)
 		{
 			client = list_entry(pos, struct client, list);
 			if (client->fd == -1)
