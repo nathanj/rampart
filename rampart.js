@@ -421,7 +421,10 @@ function update() {
 			if (dist2 > dist)
 			{
 				cb.done = true;
-				board[parseInt(cb.curr_y/16)][parseInt(cb.curr_x/16)] = 5;
+				var x = parseInt(cb.curr_x/16);
+				var y = parseInt(cb.curr_y/16);
+				if (board[y][x] != WATER)
+					board[y][x] = 5;
 			}
 		}
 	}
