@@ -88,6 +88,8 @@ struct client
 	char game[32];
 	int player;
 
+	int ready_for_next_state;
+
 	struct list_head list;
 };
 
@@ -132,6 +134,49 @@ again:
 				client->out_len = 1;
 				client->out_len += snprintf(client->out+1, BUF_SIZE,
 						"player %d\xff", client->player);
+			}
+			else if (strncmp(client->in+1, "ready", strlen("ready")) == 0)
+			{
+				/* Client is ready for the next state. Record it. If
+				 * both players are ready, send a go message to all
+				 * clients of the game. */
+
+				int ready = 0;
+
+				client->ready_for_next_state = 1;
+
+				/* See if the other player is ready. */
+				list_for_each_entry(other, client_list, list)
+				{
+					if (client->fd != other->fd
+							&& strcmp(client->game, other->game) == 0
+							&& client->player != other->player
+							&& other->ready_for_next_state
+							&& (other->player == 1
+								|| other->player == 2))
+					{
+						ready = 1;
+						break;
+					}
+				}
+
+				/* If ready, send go to all clients of the game. */
+				if (ready)
+				{
+					list_for_each_entry(other, client_list, list)
+					{
+						printf("client=%p other=%p\n", client, other);
+						if (strcmp(client->game, other->game) == 0)
+						{
+							other->ready_for_next_state = 0;
+
+							other->out[0] = '\0';
+							other->out_len = 1;
+							other->out_len += snprintf(other->out+1,
+									BUF_SIZE, "go\xff");
+						}
+					}
+				}
 			}
 			else
 			{

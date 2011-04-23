@@ -15,6 +15,7 @@ var height=30
 var player = 1;
 
 var state = 0;
+var next_state = 0;
 var state_timer = 0;
 var next_state_change = 0;
 var state_div;
@@ -317,7 +318,7 @@ function printState()
 	else if (state == 2)
 		state_div.innerHTML = "State: Shooting Cannonballs ("+secs+" seconds)";
 	else if (state == 3)
-		state_div.innerHTML = "State: In between states ("+secs+" seconds)";
+		state_div.innerHTML = "State: Waiting for other player";
 }
 
 function init()
@@ -340,7 +341,8 @@ function init()
 	figureOutProperty();
 	draw();
 
-	state = 1;
+	state = 3;
+	next_state = 1;
 	next_state_change = 20*10;
 	state_timer = 0;
 
@@ -358,6 +360,7 @@ function onOpen(evt) {
 		doSend('join ' + window.location.search);
 	else
 		doSend('join game');
+	doSend('ready');
 }
 function onClose(evt) {
 	writeToScreen("DISCONNECTED");
@@ -394,6 +397,11 @@ function onMessage(evt) {
 		if (player > 2)
 			writeToScreen('<span style="color: red; "> Players over 2 cannot do anything, sorry.</span> ');
 	}
+	else if ( (m = evt.data.match(/go/)) )
+	{
+		writeToScreen('<span style="color: blue; "> GO: ' + evt.data+'</span> ');
+		switchState();
+	}
 	else
 	{
 		writeToScreen('<span style="color: red; "> UNKNOWN MESSAGE: ' + evt.data+'</span> ');
@@ -416,7 +424,10 @@ function writeToScreen(message) {
 function switchState() {
 	state_timer = 0;
 
-	state = [1,2,0][state];
+	if (state == 3)
+		state = next_state;
+
+	next_state = [1,2,0][state];
 
 	cannons_left = 2;
 	figureOutProperty();
@@ -425,8 +436,11 @@ function switchState() {
 function update() {
 
 	state_timer++;
-	if (state_timer >= next_state_change)
-		switchState();
+	if (state != 3 && state_timer >= next_state_change)
+	{
+		state = 3;
+		websocket.send("ready");
+	}
 
 	var l = cannons.length;
 	for (var i = 0; i < l; i++)
