@@ -91,7 +91,7 @@ struct client
 
 int handle_input(struct client *client, struct client *client_list)
 {
-	struct client *tmp = NULL;
+	struct client *other = NULL;
 
 	if (client->finished_headers)
 	{
@@ -103,13 +103,13 @@ int handle_input(struct client *client, struct client *client_list)
 			printf("fd=%d is relaying: %d %s\n", client->fd, client->in_len, client->in+1);
 			client->in[client->in_len-1] = '\xff';
 
-			list_for_each_entry(tmp, &client_list->list, list)
+			list_for_each_entry(other, &client_list->list, list)
 			{
-				if (tmp->fd != client->fd)
+				if (other->fd != client->fd)
 				{
-					memcpy(tmp->out, client->in, client->in_len);
-					tmp->out_len = client->in_len;
-					printf("fd=%d len=%d\n", tmp->fd, tmp->out_len);
+					memcpy(other->out, client->in, client->in_len);
+					other->out_len = client->in_len;
+					printf("fd=%d len=%d\n", other->fd, other->out_len);
 				}
 			}
 
@@ -201,11 +201,11 @@ int handle_input(struct client *client, struct client *client_list)
 int main(int argc, char **argv)
 {
 	int socket = -1;
-	struct client *tmp = NULL;
+	struct client *client = NULL;
 	struct list_head *pos = NULL, *q = NULL;
 
-	struct client myclient;
-	INIT_LIST_HEAD(&myclient.list);
+	struct client client_list;
+	INIT_LIST_HEAD(&client_list.list);
 
 	signal(SIGPIPE, SIG_IGN);
 
@@ -224,19 +224,19 @@ int main(int argc, char **argv)
 		nfds = max(nfds, socket);
 
 		/* Build up the fd_sets for select. */
-		list_for_each_entry(tmp, &myclient.list, list)
+		list_for_each_entry(client, &client_list.list, list)
 		{
-			if (tmp->fd >= 0)
+			if (client->fd >= 0)
 			{
-				FD_SET(tmp->fd, &rd);
-				FD_SET(tmp->fd, &er);
-				if (tmp->out_len > 0)
+				FD_SET(client->fd, &rd);
+				FD_SET(client->fd, &er);
+				if (client->out_len > 0)
 				{
-					FD_SET(tmp->fd, &wr);
+					FD_SET(client->fd, &wr);
 					printf("fd=%d len=%d good for writing!\n",
-							tmp->fd, tmp->out_len);
+							client->fd, client->out_len);
 				}
-				nfds = max(nfds, tmp->fd);
+				nfds = max(nfds, client->fd);
 			}
 		}
 
@@ -255,62 +255,62 @@ int main(int argc, char **argv)
 
 			if (r != -1)
 			{
-				struct client *tmp = calloc(1, sizeof(struct client));
+				struct client *client = calloc(1, sizeof(struct client));
 
-				tmp->fd = r;
+				client->fd = r;
 
-				printf("adding client %p fd=%d\n", tmp, tmp->fd);
-				list_add_tail(&(tmp->list), &(myclient.list));
+				printf("adding client %p fd=%d\n", client, client->fd);
+				list_add_tail(&(client->list), &(client_list.list));
 			}
 		}
 
-		list_for_each_entry(tmp, &myclient.list, list)
+		list_for_each_entry(client, &client_list.list, list)
 		{
 			/* Check error. */
-			if (tmp->fd >= 0 && FD_ISSET(tmp->fd, &er)) {
+			if (client->fd >= 0 && FD_ISSET(client->fd, &er)) {
 				char c;
 
-				r = recv(tmp->fd, &c, 1, MSG_OOB);
+				r = recv(client->fd, &c, 1, MSG_OOB);
 				if (r < 1)
-					SHUT(tmp->fd);
+					SHUT(client->fd);
 
 				printf("oob?\n");
 			}
 
 			/* Check read. */
-			if (tmp->fd >= 0 && FD_ISSET(tmp->fd, &rd)) {
-				r = read(tmp->fd, tmp->in, BUF_SIZE);
+			if (client->fd >= 0 && FD_ISSET(client->fd, &rd)) {
+				r = read(client->fd, client->in, BUF_SIZE);
 				if (r < 1)
 				{
-					SHUT(tmp->fd);
+					SHUT(client->fd);
 				}
 				else
 				{
-					tmp->in_len = r;
-					handle_input(tmp, &myclient);
+					client->in_len = r;
+					handle_input(client, &client_list);
 				}
 			}
 
 			/* Check write. */
-			if (tmp->fd >= 0 && FD_ISSET(tmp->fd, &wr)) {
-				r = write(tmp->fd, tmp->out, tmp->out_len);
+			if (client->fd >= 0 && FD_ISSET(client->fd, &wr)) {
+				r = write(client->fd, client->out, client->out_len);
 				if (r < 1)
-					SHUT(tmp->fd);
+					SHUT(client->fd);
 
-				tmp->out_len = 0;
-				tmp->out[0] = '\0';
+				client->out_len = 0;
+				client->out[0] = '\0';
 			}
 		}
 
 		/* Delete all clients which no longer have an open socket. */
-		list_for_each_safe(pos, q, &myclient.list)
+		list_for_each_safe(pos, q, &client_list.list)
 		{
-			tmp = list_entry(pos, struct client, list);
-			if (tmp->fd == -1)
+			client = list_entry(pos, struct client, list);
+			if (client->fd == -1)
 			{
-				printf("deleting client %p\n", tmp);
+				printf("deleting client %p\n", client);
 				list_del(pos);
-				free(tmp);
+				free(client);
 			}
 		}
 	}
