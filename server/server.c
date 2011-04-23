@@ -122,6 +122,7 @@ int handle_input(struct client *client, struct client *client_list)
 		char *p = NULL, *start = NULL;
 		char *key1 = NULL, *key2 = NULL, *key3 = NULL;
 		char *origin = NULL;
+		char *host = NULL;
 		char response[16] = {0};
 		int i = 0;
 
@@ -162,6 +163,12 @@ int handle_input(struct client *client, struct client *client_list)
 				start += strlen("Origin: ");
 				origin = strdup(start);
 			}
+			else if ( strncmp(start, "Host: ",
+						strlen("Host: ")) == 0 )
+			{
+				start += strlen("Host: ");
+				host = strdup(start);
+			}
 
 			start = p;
 		}
@@ -173,6 +180,7 @@ int handle_input(struct client *client, struct client *client_list)
 		assert(key2);
 		assert(key3);
 		assert(origin);
+		assert(host);
 
 		compute_response(key1, key2, key3, response);
 
@@ -181,11 +189,11 @@ int handle_input(struct client *client, struct client *client_list)
 				"Upgrade: WebSocket\r\n"
 				"Connection: Upgrade\r\n"
 				"Sec-WebSocket-Origin: %s\r\n"
-				"Sec-WebSocket-Location: ws://localhost:9999/\r\n"
+				"Sec-WebSocket-Location: ws://%s/\r\n"
 				"Access-Control-Allow-Origin: null\r\n"
 				"Access-Control-Allow-Credentials: true\r\n"
 				"Access-Control-Allow-Headers: content-type\r\n"
-				"\r\n", origin);
+				"\r\n", origin, host);
 
 		for (i = 0; i < 16; i++)
 			client->out[client->out_len++] = response[i];
