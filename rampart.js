@@ -327,7 +327,10 @@ function init()
 function onOpen(evt) {
 	writeToScreen("CONNECTED");
 
-	doSend('join game');
+	if (window.location.search.length > 0)
+		doSend('join ' + window.location.search);
+	else
+		doSend('join game');
 }
 function onClose(evt) {
 	writeToScreen("DISCONNECTED");
@@ -361,6 +364,8 @@ function onMessage(evt) {
 	{
 		writeToScreen('<span style="color: blue; "> YOU ARE PLAYER: ' + evt.data+'</span> ');
 		player = parseInt(m[1]);
+		if (player > 2)
+			writeToScreen('<span style="color: red; "> Players over 2 cannot do anything, sorry.</span> ');
 	}
 	else
 	{

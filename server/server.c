@@ -85,6 +85,8 @@ struct client
 	int out_len;
 
 	int finished_headers;
+	char game[32];
+	int player;
 
 	struct list_head list;
 };
@@ -105,18 +107,41 @@ int handle_input(struct client *client, struct client *client_list)
 
 			if (strncmp(client->in+1, "join ", strlen("join ")) == 0)
 			{
+				client->in[client->in_len-1] = '\0';
+
+				snprintf(client->game, 32, "%s", client->in+6);
+				client->player = 1;
+
+				/* Figure out this client's player number. */
+again:
+				list_for_each_entry(other, &client_list->list, list)
+				{
+					if (client->fd != other->fd
+							&& strcmp(client->game, other->game) == 0
+							&& client->player == other->player)
+					{
+						client->player++;
+						goto again;
+					}
+				}
+
+				printf("client %p has joined game '%s' as player %d\n",
+						client, client->game, client->player);
+
 				client->out[0] = '\0';
 				client->out_len = 1;
 				client->out_len += snprintf(client->out+1, BUF_SIZE,
-						"player %d\xff", client->fd-3);
+						"player %d\xff", client->player);
 			}
 			else
 			{
-				/* Standard game message. Relay to other clients. */
+				/* Standard game message. Relay to other clients of the same
+				 * game. */
 
 				list_for_each_entry(other, &client_list->list, list)
 				{
-					if (other->fd != client->fd)
+					if (client->fd != other->fd
+							&& strcmp(client->game, other->game) == 0)
 					{
 						memcpy(other->out, client->in, client->in_len);
 						other->out_len = client->in_len;
