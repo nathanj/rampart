@@ -25,7 +25,7 @@ static unsigned int decode(const char *key)
 
 	assert(spaces > 0);
 
-	return ntohl(key_number / spaces);
+	return htonl(key_number / spaces);
 }
 
 /* Computes the server's response based on the three keys. The response is
