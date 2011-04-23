@@ -89,11 +89,27 @@ var board =
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 ]
 
-var WATER=0
-var WALL=4
-var OPEN=99
-var CLOSED=98
-var UNKNOWN=100
+/* first byte */
+var WATER    = 0
+var GRASS    = 1
+var FORTRESS = 2
+var FIRE     = 3
+var WALL     = 4
+/* second byte */
+var UNKNOWN  = 0<<8
+var CHECK    = 1<<8
+var OPEN     = 2<<8
+var CLOSED   = 3<<8
+
+function getTileType(x)
+{
+	return x & 0x00ff;
+}
+
+function getPropertyType(x)
+{
+	return x & 0xff00;
+}
 
 function isOpen(x, y, dx, dy)
 {
@@ -102,10 +118,12 @@ function isOpen(x, y, dx, dy)
 		x += dx;
 		y += dy;
 
-		if (board[y][x] == WATER || board[y][x] == OPEN)
+		if (getTileType(board[y][x]) == WATER
+				|| getPropertyType(board[y][x]) == OPEN)
 			return true;
 
-		if (board[y][x] == WALL || board[y][x] == CLOSED)
+		if (getTileType(board[y][x]) == WALL
+				|| getPropertyType(board[y][x]) == CLOSED)
 			return false;
 	}
 
@@ -117,12 +135,15 @@ function figureOutProperty()
 	var x = 0;
 	var y = 0;
 
+	/* Clear the property byte. */
 	for (x = 0; x < width; x++)
 	{
 		for (y = 0; y < height; y++)
 		{
-			if (board[y][x] == 1 || board[y][x] == OPEN || board[y][x] == CLOSED)
-				board[y][x] = UNKNOWN;
+			board[y][x] = getTileType(board[y][x]);
+			if (board[y][x] == GRASS
+					|| board[y][x] == FIRE)
+				board[y][x] = CHECK | board[y][x]
 		}
 	}
 
@@ -134,7 +155,7 @@ function figureOutProperty()
 		{
 			for (y = 0; y < height; y++)
 			{
-				if (board[y][x] == UNKNOWN)
+				if (getPropertyType(board[y][x]) == CHECK)
 				{
 					if (
 							isOpen(x, y, -1,  0) ||
@@ -148,7 +169,7 @@ function figureOutProperty()
 					   )
 
 					{
-						board[y][x] = OPEN;
+						board[y][x] = OPEN | getTileType(board[y][x]);
 						changed = true;
 					}
 				}
@@ -161,8 +182,8 @@ function figureOutProperty()
 	{
 		for (y = 0; y < height; y++)
 		{
-			if (board[y][x] == UNKNOWN)
-				board[y][x] = CLOSED;
+			if (getPropertyType(board[y][x]) == CHECK)
+				board[y][x] = CLOSED | getTileType(board[y][x]);
 		}
 	}
 }
@@ -180,8 +201,9 @@ function makeWall(e)
 	{
 		websocket.send('wall ' + x + "," + y);
 
-		board[y][x] = 4;
+		board[y][x] = WALL;
 
+		figureOutProperty();
 		draw();
 	}
 }
@@ -193,7 +215,9 @@ function makeCannon(e)
 	var y = parseInt(pos.y/16);
 	var x = parseInt(pos.x/16);
 
-	if (cannons_left > 0 && player_mask[y][x] == player && board[y][x] == CLOSED)
+	if (cannons_left > 0
+			&& player_mask[y][x] == player
+			&& getPropertyType(board[y][x]) == CLOSED)
 	{
 		websocket.send('cannon ' + x + "," + y);
 
@@ -213,8 +237,9 @@ function makeCannon2(pos)
 
 function makeWall2(pos)
 {
-	board[pos.y][pos.x] = 4;
+	board[pos.y][pos.x] = WALL;
 
+	figureOutProperty();
 	draw();
 }
 
@@ -226,7 +251,8 @@ function fireCannonball(e)
 	for (var i = 0; i < l; i++)
 	{
 		var c = cannons[i];
-		if (player_mask[c.y][c.x] == player && board[c.y][c.x] == CLOSED)
+		if (player_mask[c.y][c.x] == player
+				&& getPropertyType(board[c.y][c.x]) == CLOSED)
 		{
 			if (c.fire_timer == 0)
 			{
@@ -311,9 +337,10 @@ function init()
 	state_div.innerHTML = "whee";
 
 
+	figureOutProperty();
 	draw();
 
-	state = 0;
+	state = 1;
 	next_state_change = 20*10;
 	state_timer = 0;
 
@@ -392,6 +419,7 @@ function switchState() {
 	state = [1,2,0][state];
 
 	cannons_left = 2;
+	figureOutProperty();
 }
 
 function update() {
@@ -423,8 +451,12 @@ function update() {
 				cb.done = true;
 				var x = parseInt(cb.end_x/16);
 				var y = parseInt(cb.end_y/16);
-				if (board[y][x] != WATER)
-					board[y][x] = 5;
+				if (getTileType(board[y][x]) != WATER)
+					board[y][x] = FIRE;
+
+				/* Note: property does not change here until the state changes.
+				 * Otherwise, the player might not be able to fire all his
+				 * cannons that he should own. */
 			}
 		}
 	}
@@ -435,26 +467,37 @@ function update() {
 function draw() {
 
 	printState();
-	figureOutProperty();
 
 	for (var i = 0; i < 40; i++)
+	{
 		for (var j = 0; j < 30; j++)
 		{
-			if (board[j][i] == 0)
-				drawWater(i, j);
-			else if (board[j][i] == 1)
-				drawGrass(i, j);
-			else if (board[j][i] == 2)
-				drawCastle(i, j);
-			else if (board[j][i] == 4)
-				drawWall(i, j);
-			else if (board[j][i] == 5)
-				drawBurn(i, j);
-			else if (board[j][i] == OPEN)
-				drawGrass(i, j);
-			else if (board[j][i] == CLOSED)
-				drawProperty(i, j);
+			switch(getTileType(board[j][i]))
+			{
+				case WATER:
+					drawWater(i, j);
+					break;
+				case GRASS:
+					if (getPropertyType(board[j][i]) == CLOSED)
+						drawProperty(i, j);
+					else
+						drawGrass(i, j);
+					break;
+				case FORTRESS:
+					drawCastle(i, j);
+					break;
+				case WALL:
+					drawWall(i, j);
+					break;
+				case FIRE:
+					drawBurn(i, j);
+					break;
+				default:
+					alert('wuttt');
+					break;
+			}
 		}
+	}
 
 	drawCannons();
 	drawCannonballs();
