@@ -145,14 +145,14 @@ int handle_input(struct client *client, struct client *client_list)
 				break;
 			}
 
-			if ( strncmp(start, "Sec-WebSocket-Key1",
-						strlen("Sec-WebSocket-Key1")) == 0 )
+			if ( strncmp(start, "Sec-WebSocket-Key1: ",
+						strlen("Sec-WebSocket-Key1: ")) == 0 )
 			{
 				start += strlen("Sec-WebSocket-Key1: ");
 				key1 = strdup(start);
 			}
-			else if ( strncmp(start, "Sec-WebSocket-Key2",
-						strlen("Sec-WebSocket-Key2")) == 0 )
+			else if ( strncmp(start, "Sec-WebSocket-Key2: ",
+						strlen("Sec-WebSocket-Key2: ")) == 0 )
 			{
 				start += strlen("Sec-WebSocket-Key2: ");
 				key2 = strdup(start);
