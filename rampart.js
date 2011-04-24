@@ -22,6 +22,36 @@ var state_div;
 
 var cannons_left = 2;
 
+var mouse_x = 0;
+var mouse_y = 0;
+
+var pieces = [
+[ [ 0,0,0 ],
+  [ 0,1,0 ],
+  [ 0,0,0 ], ],
+[ [ 0,0,0 ],
+  [ 1,1,1 ],
+  [ 0,0,1 ], ],
+[ [ 0,1,0 ],
+  [ 1,1,1 ],
+  [ 0,0,0 ], ],
+[ [ 0,0,0 ],
+  [ 1,1,1 ],
+  [ 0,0,0 ], ],
+[ [ 0,0,0 ],
+  [ 0,1,1 ],
+  [ 0,1,1 ], ],
+[ [ 0,0,0 ],
+  [ 0,1,1 ],
+  [ 0,0,0 ], ],
+[ [ 1,0,1 ],
+  [ 1,1,1 ],
+  [ 0,0,0 ], ],
+]
+
+var current_piece;
+
+
 var player_mask =
 [
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -189,24 +219,94 @@ function figureOutProperty()
 	}
 }
 
+function newPiece()
+{
+	var pos = parseInt(Math.random()*100) % pieces.length;
+
+	current_piece = [ [0,0,0], [0,0,0], [0,0,0] ];
+
+	for (var i = 0; i < 3; i++)
+		for (var j = 0; j < 3; j++)
+			current_piece[i][j] = pieces[pos][i][j];
+}
+
+function rotatePiece(dir)
+{
+	var tmp = [ [0,0,0], [0,0,0], [0,0,0] ];
+
+	for (var i = 0; i < 3; i++)
+		for (var j = 0; j < 3; j++)
+			tmp[i][j] = current_piece[i][j];
+
+	if (dir == 1)
+	{
+		current_piece[0][0] = tmp[2][0];
+		current_piece[0][1] = tmp[1][0];
+		current_piece[0][2] = tmp[0][0];
+		current_piece[1][0] = tmp[2][1];
+		current_piece[1][1] = tmp[1][1];
+		current_piece[1][2] = tmp[0][1];
+		current_piece[2][0] = tmp[2][2];
+		current_piece[2][1] = tmp[1][2];
+		current_piece[2][2] = tmp[0][2];
+	}
+	else
+	{
+		current_piece[2][0] = tmp[0][0];
+		current_piece[1][0] = tmp[0][1];
+		current_piece[0][0] = tmp[0][2];
+		current_piece[2][1] = tmp[1][0];
+		current_piece[1][1] = tmp[1][1];
+		current_piece[0][1] = tmp[1][2];
+		current_piece[2][2] = tmp[2][0];
+		current_piece[1][2] = tmp[2][1];
+		current_piece[0][2] = tmp[2][2];
+	}
+}
+
 var ctrl = false;
 
-function makeWall(e)
+function canMakeWall(e)
 {
 	var pos = getCursorPosition(e);
 
 	var y = parseInt(pos.y/16);
 	var x = parseInt(pos.x/16);
 
-	if (player_mask[y][x] == player)
-	{
-		websocket.send('wall ' + x + "," + y);
+	for (var i = 0; i < 3; i++)
+		for (var j = 0; j < 3; j++)
+			if (current_piece[i][j] == 1)
+			{
+				if (!(getTileType(board[y+j-1][x+i-1]) == GRASS
+							|| getTileType(board[y+j-1][x+i-1]) == FIRE)
+						|| player_mask[y+j-1][x+i-1] != player)
+					return false;
+			}
 
-		board[y][x] = WALL;
+	return true;
+}
 
-		figureOutProperty();
-		draw();
-	}
+function makeWall(e)
+{
+	if (!canMakeWall(e))
+		return;
+
+	var pos = getCursorPosition(e);
+
+	var y = parseInt(pos.y/16);
+	var x = parseInt(pos.x/16);
+
+	for (var i = 0; i < 3; i++)
+		for (var j = 0; j < 3; j++)
+			if (current_piece[i][j] == 1)
+			{
+				websocket.send('wall ' + (x+i-1) + "," + (y+j-1));
+				board[y+j-1][x+i-1] = WALL;
+			}
+
+	newPiece();
+	figureOutProperty();
+	draw();
 }
 
 function makeCannon(e)
@@ -279,6 +379,12 @@ function fireCannonball2(from, to)
 	draw();
 }
 
+function onMouseMove(e)
+{
+	mouse_x = e.x;
+	mouse_y = e.y;
+}
+
 function onClick(e)
 {
 	if (state == 2)
@@ -295,6 +401,13 @@ function doKeyDown(e)
 	{
 		case 17:
 			ctrl = true;
+			break;
+		case 88: // x
+			rotatePiece(0);
+			break;
+		case 90: // z
+			rotatePiece(1);
+			break;
 	}
 }
 
@@ -324,7 +437,8 @@ function printState()
 function init()
 {
 	a = document.getElementById("a");
-    a.addEventListener("click", onClick, false);
+	a.addEventListener("click", onClick, false);
+	a.addEventListener("mousemove", onMouseMove, false);
 	window.addEventListener('keydown', doKeyDown, false);
 	window.addEventListener('keyup', doKeyUp, false);
 
@@ -338,6 +452,7 @@ function init()
 	state_div.innerHTML = "whee";
 
 
+	newPiece();
 	figureOutProperty();
 	draw();
 
@@ -429,6 +544,11 @@ function switchState() {
 
 	next_state = [1,2,0][state];
 
+	if (state == 0)
+		next_state_change = 20*20;
+	else
+		next_state_change = 20*10;
+
 	cannons_left = 2;
 	figureOutProperty();
 }
@@ -515,11 +635,21 @@ function draw() {
 
 	drawCannons();
 	drawCannonballs();
+	if (state == 0)
+		drawPiece();
 }
 
 function square(x)
 {
 	return x*x;
+}
+
+function drawPiece()
+{
+	for (var i = 0; i < 3; i++)
+		for (var j = 0; j < 3; j++)
+			if (current_piece[i][j] == 1)
+				drawPieceWall(parseInt((mouse_x-24)/16)+i, parseInt((mouse_y-24)/16)+j);
 }
 
 function drawCannons()
@@ -648,6 +778,13 @@ function drawProperty(x, y) {
 	else
 		c.fillStyle = player_mask[y][x] == 1 ? "#66b" : "#b66";
 	c.fillRect(x*16, y*16, 16, 16);
+}
+
+function drawPieceWall(x, y) {
+	c.fillStyle = "#fcf";
+	c.globalAlpha = 0.7;
+	c.fillRect(x*16, y*16, 16, 16);
+	c.globalAlpha = 1.0;
 }
 
 function drawWall(x, y) {
