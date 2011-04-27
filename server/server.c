@@ -100,18 +100,32 @@ int handle_input(struct client *client, struct list_head *client_list)
 	if (client->finished_headers)
 	{
 		/* Handle game messages. */
+		char *next = client->in;
 
-		if (client->in_len > 0)
+		while (client->in_len > 0)
 		{
-			client->in[client->in_len-1] = '\0';
-			printf("fd=%d is relaying: %d %s\n", client->fd, client->in_len, client->in+1);
-			client->in[client->in_len-1] = '\xff';
+			char *in = next;
+			int len = 0;
+			char *p = NULL;
 
-			if (strncmp(client->in+1, "join ", strlen("join ")) == 0)
+			p = in;
+			while (*p != '\xff' && len < client->in_len)
 			{
-				client->in[client->in_len-1] = '\0';
+				p++;
+				len++;
+			}
 
-				snprintf(client->game, 32, "%s", client->in+6);
+			len++;
+			next = p + 1;
+
+			assert(*p == '\xff');
+
+			*p = '\x0';
+			printf("fd=%d is relaying: %d %d %s\n", client->fd, len, client->in_len, in+1);
+
+			if (strncmp(in+1, "join ", strlen("join ")) == 0)
+			{
+				snprintf(client->game, 32, "%s", in+6);
 				client->player = 1;
 
 				/* Figure out this client's player number. */
@@ -130,12 +144,11 @@ again:
 				printf("client %p has joined game '%s' as player %d\n",
 						client, client->game, client->player);
 
-				client->out[0] = '\0';
-				client->out_len = 1;
-				client->out_len += snprintf(client->out+1, BUF_SIZE,
+				client->out[client->out_len++] = '\0';
+				client->out_len += snprintf(client->out+client->out_len, BUF_SIZE,
 						"player %d\xff", client->player);
 			}
-			else if (strncmp(client->in+1, "ready", strlen("ready")) == 0)
+			else if (strncmp(in+1, "ready", strlen("ready")) == 0)
 			{
 				/* Client is ready for the next state. Record it. If
 				 * both players are ready, send a go message to all
@@ -170,9 +183,8 @@ again:
 						{
 							other->ready_for_next_state = 0;
 
-							other->out[0] = '\0';
-							other->out_len = 1;
-							other->out_len += snprintf(other->out+1,
+							other->out[other->out_len++] = '\0';
+							other->out_len += snprintf(other->out+other->out_len,
 									BUF_SIZE, "go\xff");
 						}
 					}
@@ -188,14 +200,15 @@ again:
 					if (client->fd != other->fd
 							&& strcmp(client->game, other->game) == 0)
 					{
-						memcpy(other->out, client->in, client->in_len);
-						other->out_len = client->in_len;
+						*p = '\xff';
+						memcpy(other->out + other->out_len, in, len);
+						other->out_len += len;
 						printf("fd=%d len=%d\n", other->fd, other->out_len);
 					}
 				}
 			}
 
-			client->in_len = 0;
+			client->in_len -= len;
 		}
 	}
 	else
@@ -368,14 +381,14 @@ int main(int argc, char **argv)
 
 			/* Check read. */
 			if (client->fd >= 0 && FD_ISSET(client->fd, &rd)) {
-				r = read(client->fd, client->in, BUF_SIZE);
+				r = read(client->fd, client->in + client->in_len, BUF_SIZE);
 				if (r < 1)
 				{
 					SHUT(client->fd);
 				}
 				else
 				{
-					client->in_len = r;
+					client->in_len += r;
 					handle_input(client, &client_list);
 				}
 			}
