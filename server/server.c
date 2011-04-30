@@ -14,6 +14,7 @@
 #include "list.h"
 
 #include "key.h"
+#include "rampart.h"
 
 #define max(x,y) ((x) > (y) ? (x) : (y))
 
@@ -74,29 +75,100 @@ static int accept_client(int socket)
 	}                               \
 } while (0)
 
-#define BUF_SIZE 4096
-
-struct client
+int handle_handshake(struct client *client)
 {
-	int fd;
-	char in[BUF_SIZE];
-	int in_len;
-	char out[BUF_SIZE];
-	int out_len;
+	/* Send the response. */
+	char *p = NULL, *start = NULL;
+	char *key1 = NULL, *key2 = NULL, *key3 = NULL;
+	char *origin = NULL;
+	char *host = NULL;
+	char response[16] = {0};
+	int i = 0;
 
-	int finished_headers;
-	char game[32];
-	int player;
+	start = client->in;
+	while (*start)
+	{
+		p = strchr(start, '\r');
 
-	int ready_for_next_state;
+		if (p)
+		{
+			*p++ = '\0'; /* remove \r */
+			*p++ = '\0'; /* remove \n */
 
-	struct list_head list;
-};
+			/* We are at the blank line, the rest is data. */
+			if (start == p-2)
+				break;
+		}
+		else
+		{
+			break;
+		}
 
+		if ( strncmp(start, "Sec-WebSocket-Key1: ",
+					strlen("Sec-WebSocket-Key1: ")) == 0 )
+		{
+			start += strlen("Sec-WebSocket-Key1: ");
+			key1 = strdup(start);
+		}
+		else if ( strncmp(start, "Sec-WebSocket-Key2: ",
+					strlen("Sec-WebSocket-Key2: ")) == 0 )
+		{
+			start += strlen("Sec-WebSocket-Key2: ");
+			key2 = strdup(start);
+		}
+		else if ( strncmp(start, "Origin: ",
+					strlen("Origin: ")) == 0 )
+		{
+			start += strlen("Origin: ");
+			origin = strdup(start);
+		}
+		else if ( strncmp(start, "Host: ",
+					strlen("Host: ")) == 0 )
+		{
+			start += strlen("Host: ");
+			host = strdup(start);
+		}
+
+		start = p;
+	}
+
+	if (p)
+		key3 = strdup(p);
+
+	assert(key1);
+	assert(key2);
+	assert(key3);
+	assert(origin);
+	assert(host);
+
+	compute_response(key1, key2, key3, response);
+
+	client->out_len = snprintf(client->out, BUF_SIZE,
+			"HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
+			"Upgrade: WebSocket\r\n"
+			"Connection: Upgrade\r\n"
+			"Sec-WebSocket-Origin: %s\r\n"
+			"Sec-WebSocket-Location: ws://%s/\r\n"
+			"Access-Control-Allow-Origin: null\r\n"
+			"Access-Control-Allow-Credentials: true\r\n"
+			"Access-Control-Allow-Headers: content-type\r\n"
+			"\r\n", origin, host);
+
+	for (i = 0; i < 16; i++)
+		client->out[client->out_len++] = response[i];
+
+	client->out[client->out_len] = '\0';
+
+	client->finished_headers = 1;
+	client->in_len = 0;
+
+	return 0;
+}
+
+/* Handle input received from a client. Input can be either the initial
+ * handshake or a game message. */
 int handle_input(struct client *client, struct list_head *client_list)
 {
-	struct client *other = NULL;
-
 	if (client->finished_headers)
 	{
 		/* Handle game messages. */
@@ -123,179 +195,14 @@ int handle_input(struct client *client, struct list_head *client_list)
 			*p = '\x0';
 			printf("fd=%d is relaying: %d %d %s\n", client->fd, len, client->in_len, in+1);
 
-			if (strncmp(in+1, "join ", strlen("join ")) == 0)
-			{
-				snprintf(client->game, 32, "%s", in+6);
-				client->player = 1;
-
-				/* Figure out this client's player number. */
-again:
-				list_for_each_entry(other, client_list, list)
-				{
-					if (client->fd != other->fd
-							&& strcmp(client->game, other->game) == 0
-							&& client->player == other->player)
-					{
-						client->player++;
-						goto again;
-					}
-				}
-
-				printf("client %p has joined game '%s' as player %d\n",
-						client, client->game, client->player);
-
-				client->out[client->out_len++] = '\0';
-				client->out_len += snprintf(client->out+client->out_len, BUF_SIZE,
-						"player %d\xff", client->player);
-			}
-			else if (strncmp(in+1, "ready", strlen("ready")) == 0)
-			{
-				/* Client is ready for the next state. Record it. If
-				 * both players are ready, send a go message to all
-				 * clients of the game. */
-
-				int ready = 0;
-
-				client->ready_for_next_state = 1;
-
-				/* See if the other player is ready. */
-				list_for_each_entry(other, client_list, list)
-				{
-					if (client->fd != other->fd
-							&& strcmp(client->game, other->game) == 0
-							&& client->player != other->player
-							&& other->ready_for_next_state
-							&& (other->player == 1
-								|| other->player == 2))
-					{
-						ready = 1;
-						break;
-					}
-				}
-
-				/* If ready, send go to all clients of the game. */
-				if (ready)
-				{
-					list_for_each_entry(other, client_list, list)
-					{
-						printf("client=%p other=%p\n", client, other);
-						if (strcmp(client->game, other->game) == 0)
-						{
-							other->ready_for_next_state = 0;
-
-							other->out[other->out_len++] = '\0';
-							other->out_len += snprintf(other->out+other->out_len,
-									BUF_SIZE, "go\xff");
-						}
-					}
-				}
-			}
-			else
-			{
-				/* Standard game message. Relay to other clients of the same
-				 * game. */
-
-				list_for_each_entry(other, client_list, list)
-				{
-					if (client->fd != other->fd
-							&& strcmp(client->game, other->game) == 0)
-					{
-						*p = '\xff';
-						memcpy(other->out + other->out_len, in, len);
-						other->out_len += len;
-						printf("fd=%d len=%d\n", other->fd, other->out_len);
-					}
-				}
-			}
+			handle_message(in, client, client_list);
 
 			client->in_len -= len;
 		}
 	}
 	else
 	{
-		/* Send the response. */
-		char *p = NULL, *start = NULL;
-		char *key1 = NULL, *key2 = NULL, *key3 = NULL;
-		char *origin = NULL;
-		char *host = NULL;
-		char response[16] = {0};
-		int i = 0;
-
-		start = client->in;
-		while (*start)
-		{
-			p = strchr(start, '\r');
-
-			if (p)
-			{
-				*p++ = '\0'; /* remove \r */
-				*p++ = '\0'; /* remove \n */
-
-				/* We are at the blank line, the rest is data. */
-				if (start == p-2)
-					break;
-			}
-			else
-			{
-				break;
-			}
-
-			if ( strncmp(start, "Sec-WebSocket-Key1: ",
-						strlen("Sec-WebSocket-Key1: ")) == 0 )
-			{
-				start += strlen("Sec-WebSocket-Key1: ");
-				key1 = strdup(start);
-			}
-			else if ( strncmp(start, "Sec-WebSocket-Key2: ",
-						strlen("Sec-WebSocket-Key2: ")) == 0 )
-			{
-				start += strlen("Sec-WebSocket-Key2: ");
-				key2 = strdup(start);
-			}
-			else if ( strncmp(start, "Origin: ",
-						strlen("Origin: ")) == 0 )
-			{
-				start += strlen("Origin: ");
-				origin = strdup(start);
-			}
-			else if ( strncmp(start, "Host: ",
-						strlen("Host: ")) == 0 )
-			{
-				start += strlen("Host: ");
-				host = strdup(start);
-			}
-
-			start = p;
-		}
-
-		if (p)
-			key3 = strdup(p);
-
-		assert(key1);
-		assert(key2);
-		assert(key3);
-		assert(origin);
-		assert(host);
-
-		compute_response(key1, key2, key3, response);
-
-		client->out_len = snprintf(client->out, BUF_SIZE,
-				"HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
-				"Upgrade: WebSocket\r\n"
-				"Connection: Upgrade\r\n"
-				"Sec-WebSocket-Origin: %s\r\n"
-				"Sec-WebSocket-Location: ws://%s/\r\n"
-				"Access-Control-Allow-Origin: null\r\n"
-				"Access-Control-Allow-Credentials: true\r\n"
-				"Access-Control-Allow-Headers: content-type\r\n"
-				"\r\n", origin, host);
-
-		for (i = 0; i < 16; i++)
-			client->out[client->out_len++] = response[i];
-
-		client->out[client->out_len] = '\0';
-
-		client->finished_headers = 1;
+		handle_handshake(client);
 	}
 
 	return 0;
