@@ -432,6 +432,8 @@ function printState()
 		state_div.innerHTML = "State: Shooting Cannonballs ("+secs+" seconds)";
 	else if (state == 3)
 		state_div.innerHTML = "State: Waiting for other player";
+	else if (state == 4)
+		state_div.innerHTML = "State: Waiting for cannonballs to land";
 }
 
 function init()
@@ -457,7 +459,7 @@ function init()
 	draw();
 
 	state = 3;
-	next_state = 1;
+	next_state = 0;
 	next_state_change = 20*10;
 	state_timer = 0;
 
@@ -555,13 +557,6 @@ function switchState() {
 
 function update() {
 
-	state_timer++;
-	if (state != 3 && state_timer >= next_state_change)
-	{
-		state = 3;
-		websocket.send("ready");
-	}
-
 	var l = cannons.length;
 	for (var i = 0; i < l; i++)
 	{
@@ -569,12 +564,15 @@ function update() {
 			cannons[i].fire_timer--;
 	}
 
+	var cannonballs_left = false;
 	l = cannonballs.length;
 	for (var i = 0; i < l; i++)
 	{
 		var cb = cannonballs[i];
 		if (!cb.done)
 		{
+			cannonballs_left = true;
+
 			var dist = Math.abs(cb.end_x - cb.curr_x) + Math.abs(cb.end_y - cb.curr_y);
 			cb.curr_x = cb.curr_x + cb.v*cb.dx;
 			cb.curr_y = cb.curr_y + cb.v*cb.dy;
@@ -593,6 +591,24 @@ function update() {
 				 * cannons that he should own. */
 			}
 		}
+	}
+
+	state_timer++;
+	if (state < 3 && state_timer >= next_state_change)
+	{
+		if (state == 2)
+			state = 4;
+		else
+		{
+			state = 3;
+			websocket.send("ready");
+		}
+	}
+
+	if (!cannonballs_left && state == 4)
+	{
+		state = 3;
+		websocket.send("ready");
 	}
 
 	draw();
