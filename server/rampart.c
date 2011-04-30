@@ -25,7 +25,7 @@ again:
 		}
 	}
 
-	printf("client %p has joined game '%s' as player %d\n",
+	dbg("client %p has joined game '%s' as player %d\n",
 			client, client->game, client->player);
 
 	client->out[client->out_len++] = '\0';
@@ -65,7 +65,7 @@ int handle_ready_message(const char *in, struct client *client,
 	{
 		list_for_each_entry(other, client_list, list)
 		{
-			printf("client=%p other=%p\n", client, other);
+			dbg("client=%p other=%p\n", client, other);
 			if (strcmp(client->game, other->game) == 0)
 			{
 				other->ready_for_next_state = 0;
@@ -86,7 +86,7 @@ int handle_normal_message(const char *in, struct client *client,
 {
 	struct client *other = NULL;
 
-	printf("sending %s to everyone\n", in+1);
+	dbg("sending %s to everyone\n", in+1);
 
 	list_for_each_entry(other, client_list, list)
 	{
@@ -98,7 +98,7 @@ int handle_normal_message(const char *in, struct client *client,
 			memcpy(other->out + other->out_len, in, len);
 			other->out_len += len;
 			other->out[other->out_len-1] = '\xff';
-			printf("fd=%d len=%d\n", other->fd, other->out_len);
+			dbg("fd=%d len=%d\n", other->fd, other->out_len);
 		}
 	}
 
@@ -109,7 +109,7 @@ int handle_normal_message(const char *in, struct client *client,
 int handle_message(const char *in, struct client *client,
 		struct list_head *client_list)
 {
-	printf("msg: %s\n", in+1);
+	dbg("msg: %s\n", in+1);
 	if (strncmp(in+1, "join ", strlen("join ")) == 0)
 		handle_join_message(in, client, client_list);
 	else if (strncmp(in+1, "ready", strlen("ready")) == 0)

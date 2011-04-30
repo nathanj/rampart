@@ -43,7 +43,7 @@ static int listen_socket(int listen_port)
 		close(s);
 		return -1;
 	}
-	printf("accepting connections on port %d\n", listen_port);
+	dbg("accepting connections on port %d\n", listen_port);
 	listen(s, 10);
 	return s;
 }
@@ -60,7 +60,7 @@ static int accept_client(int socket)
 		perror("accept()");
 	}
 
-	printf("connect from %d %s\n", r,
+	dbg("connect from %d %s\n", r,
 			inet_ntoa(client_address.sin_addr));
 
 	return r;
@@ -70,7 +70,6 @@ static int accept_client(int socket)
 	if ((x) >= 0) {                 \
 		shutdown((x), SHUT_RDWR);   \
 		close((x));                 \
-		printf("closing " # x "\n");\
 		(x) = -1;                   \
 	}                               \
 } while (0)
@@ -193,7 +192,7 @@ int handle_input(struct client *client, struct list_head *client_list)
 			assert(*p == '\xff');
 
 			*p = '\x0';
-			printf("fd=%d is relaying: %d %d %s\n", client->fd, len, client->in_len, in+1);
+			dbg("fd=%d is relaying: %d %d %s\n", client->fd, len, client->in_len, in+1);
 
 			handle_message(in, client, client_list);
 
@@ -242,7 +241,7 @@ int main(int argc, char **argv)
 				if (client->out_len > 0)
 				{
 					FD_SET(client->fd, &wr);
-					printf("fd=%d len=%d good for writing!\n",
+					dbg("fd=%d len=%d good for writing!\n",
 							client->fd, client->out_len);
 				}
 				nfds = max(nfds, client->fd);
@@ -268,7 +267,7 @@ int main(int argc, char **argv)
 
 				client->fd = r;
 
-				printf("adding client %p fd=%d\n", client, client->fd);
+				dbg("adding client %p fd=%d\n", client, client->fd);
 				list_add_tail(&(client->list), &client_list);
 			}
 		}
@@ -282,8 +281,6 @@ int main(int argc, char **argv)
 				r = recv(client->fd, &c, 1, MSG_OOB);
 				if (r < 1)
 					SHUT(client->fd);
-
-				printf("oob?\n");
 			}
 
 			/* Check read. */
@@ -317,7 +314,7 @@ int main(int argc, char **argv)
 			client = list_entry(pos, struct client, list);
 			if (client->fd == -1)
 			{
-				printf("deleting client %p\n", client);
+				dbg("deleting client %p\n", client);
 				list_del(pos);
 				free(client);
 			}
