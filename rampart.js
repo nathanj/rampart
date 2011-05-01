@@ -490,20 +490,17 @@ function onMessage(evt) {
 
 	if ( (m = evt.data.match(/cannonball (\d+),(\d+),(\d+),(\d+)/)) )
 	{
-		writeToScreen('<span style="color: blue; "> ANOTHER PLAYER SHOOTS AT: ' + evt.data+'</span> ');
 		from = new Cell(parseInt(m[1]), parseInt(m[2]));
 		to = new Cell(parseInt(m[3]), parseInt(m[4]));
 		fireCannonball2(from, to);
 	}
 	else if ( (m = evt.data.match(/wall (\d+),(\d+)/)) )
 	{
-		writeToScreen('<span style="color: blue; "> ANOTHER PLAYER WALLS: ' + evt.data+'</span> ');
 		pos = new Cell(parseInt(m[1]), parseInt(m[2]));
 		makeWall2(pos);
 	}
 	else if ( (m = evt.data.match(/cannon (\d+),(\d+)/)) )
 	{
-		writeToScreen('<span style="color: blue; "> ANOTHER PLAYER CANNONS: ' + evt.data+'</span> ');
 		pos = new Cell(parseInt(m[1]), parseInt(m[2]));
 		makeCannon2(pos);
 	}
@@ -516,7 +513,6 @@ function onMessage(evt) {
 	}
 	else if ( (m = evt.data.match(/go/)) )
 	{
-		writeToScreen('<span style="color: blue; "> GO: ' + evt.data+'</span> ');
 		switchState();
 	}
 	else
