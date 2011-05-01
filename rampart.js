@@ -653,6 +653,38 @@ function draw() {
 	drawCannonballs();
 	if (state == 0)
 		drawPiece();
+
+	var p = (next_state_change - state_timer) / next_state_change;
+
+	if (p < 0)
+		p = 0;
+
+	if (state != 3 && state != 4)
+	{
+		c.fillStyle = "#f00";
+		c.fillRect(3*16, 8, 34*16*p, 16);
+	}
+
+	c.fillStyle = "#000";
+	c.strokeRect(3*16, 8, 34*16, 16);
+
+	c.font = "bold 14px sans-serif";
+	c.textBaseline = "top";
+	c.fillStyle = "#000";
+
+	var tx = 3*16 + 10;
+	var ty = 8;
+
+	if (state == 0)
+		c.fillText("Build Walls!", tx, ty);
+	else if (state == 1)
+		c.fillText("Build Cannons (" + cannons_left + " left)!", tx, ty);
+	else if (state == 2)
+		c.fillText("Fire!", tx, ty);
+	else if (state == 3)
+		c.fillText("Waiting...", tx, ty);
+	else if (state == 4)
+		c.fillText("Waiting...", tx, ty);
 }
 
 function square(x)
@@ -766,7 +798,7 @@ function drawCannon(x, y) {
 }
 
 function drawCastle(x, y) {
-	c.fillStyle = "#333";
+	c.fillStyle = "#dd3";
 	c.fillRect(x*16, y*16, 16, 16);
 }
 
