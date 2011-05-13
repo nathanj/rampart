@@ -3,7 +3,7 @@
 
 #include "list.h"
 
-#define dbg(fmt, args...) printf("%25s:%4d: " fmt, __func__, __LINE__, args);
+#define dbg(fmt, args...) printf("%25s:%4d: " fmt, __func__, __LINE__, ##args);
 
 #define BUF_SIZE 4096
 
