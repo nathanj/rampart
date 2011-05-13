@@ -28,7 +28,7 @@ int handle_join_message(const char *in, struct client *client,
 		struct list_head *client_list);
 
 int handle_ready_message(const char *in, struct client *client,
-		struct list_head *client_list);
+		struct list_head *client_list, int game_over);
 
 int handle_normal_message(const char *in, struct client *client,
 		struct list_head *client_list);

@@ -38,7 +38,7 @@ again:
 /* Client is ready for the next state. Record it. If both players are
  * ready, send a go message to all clients of the game. */
 int handle_ready_message(const char *in, struct client *client,
-		struct list_head *client_list)
+		struct list_head *client_list, int game_over)
 {
 	struct client *other = NULL;
 	int ready = 0;
@@ -60,7 +60,8 @@ int handle_ready_message(const char *in, struct client *client,
 		}
 	}
 
-	/* If ready, send go to all clients of the game. */
+	/* If ready, send go to all clients of the game. If gameover, then
+	 * start a new game. */
 	if (ready)
 	{
 		list_for_each_entry(other, client_list, list)
@@ -71,8 +72,16 @@ int handle_ready_message(const char *in, struct client *client,
 				other->ready_for_next_state = 0;
 
 				other->out[other->out_len++] = '\0';
-				other->out_len += snprintf(other->out+other->out_len,
-						BUF_SIZE, "go\xff");
+				if (game_over)
+				{
+					other->out_len += snprintf(other->out+other->out_len,
+							BUF_SIZE, "newgame\xff");
+				}
+				else
+				{
+					other->out_len += snprintf(other->out+other->out_len,
+							BUF_SIZE, "go\xff");
+				}
 			}
 		}
 	}
@@ -113,7 +122,9 @@ int handle_message(const char *in, struct client *client,
 	if (strncmp(in+1, "join ", strlen("join ")) == 0)
 		handle_join_message(in, client, client_list);
 	else if (strncmp(in+1, "ready", strlen("ready")) == 0)
-		handle_ready_message(in, client, client_list);
+		handle_ready_message(in, client, client_list, 0);
+	else if (strncmp(in+1, "gameover", strlen("gameover")) == 0)
+		handle_ready_message(in, client, client_list, 1);
 	else
 		handle_normal_message(in, client, client_list);
 
