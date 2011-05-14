@@ -316,6 +316,10 @@ function canMakeWall(e)
 							|| getTileType(board[y+j-1][x+i-1]) == FIRE)
 						|| player_mask[y+j-1][x+i-1] != player)
 					return false;
+
+				for (var c = 0; c < cannons.length; c++)
+					if (cannons[c].x == x+i-1 && cannons[c].y == y+j-1)
+						return false;
 			}
 
 	return true;
