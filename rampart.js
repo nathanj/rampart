@@ -631,8 +631,15 @@ function switchState() {
 	else
 		next_state_change = 20*10;
 
-	cannons_left = 2;
 	figureOutProperty();
+
+	cannons_left = 0;
+
+	for (var i = 0; i < height; i++)
+		for (var j = 0; j < width; j++)
+			if (player_mask[i][j] == player
+					&& board[i][j] == (CLOSED | FORTRESS))
+				cannons_left++;
 }
 
 function figureOutIfOver()
