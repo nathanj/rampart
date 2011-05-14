@@ -428,6 +428,11 @@ function onClick(e)
 		makeWall(e);
 	else if (state == 1)
 		makeCannon(e);
+	else if (state == 8)
+	{
+		websocket.send("gameover");
+		state = 3;
+	}
 }
 
 function doKeyDown(e)
@@ -475,6 +480,8 @@ function printState()
 		state_div.innerHTML = "State: You Lost!";
 	else if (state == 7)
 		state_div.innerHTML = "State: Draw!";
+	else if (state == 8)
+		state_div.innerHTML = "State: Click to play again!";
 }
 
 function getNewBoard()
@@ -648,7 +655,7 @@ function figureOutIfOver()
 
 function sendGameover()
 {
-	websocket.send("gameover");
+	state = 8;
 }
 
 function update() {
@@ -815,6 +822,8 @@ function draw() {
 		c.fillText("You Lost!", tx, ty);
 	else if (state == 7)
 		c.fillText("Draw!", tx, ty);
+	else if (state == 8)
+		c.fillText("Click to play again!", tx, ty);
 }
 
 function square(x)
