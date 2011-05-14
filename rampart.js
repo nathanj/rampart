@@ -355,9 +355,18 @@ function makeCannon(e)
 	var y = parseInt(pos.y/16);
 	var x = parseInt(pos.x/16);
 
+	var cannon_already_there = false;
+
+	for (var c = 0; c < cannons.length; c++)
+		if (cannons[c].x == x && cannons[c].y == y)
+			cannon_already_there = true;
+
 	if (cannons_left > 0
+			&& !cannon_already_there
 			&& player_mask[y][x] == player
-			&& getPropertyType(board[y][x]) == CLOSED)
+			&& getPropertyType(board[y][x]) == CLOSED
+			&& (getTileType(board[y][x]) == GRASS
+				|| getTileType(board[y][x]) == FIRE))
 	{
 		websocket.send('cannon ' + x + "," + y);
 
