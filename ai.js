@@ -263,6 +263,8 @@ function newPiece()
 	for (var i = 0; i < 3; i++)
 		for (var j = 0; j < 3; j++)
 			current_piece[i][j] = pieces[pos][i][j];
+
+	//current_piece = [ [0,0,0], [0,1,0], [0,0,0] ];
 }
 
 function rotatePiece(dir)
@@ -300,6 +302,28 @@ function rotatePiece(dir)
 }
 
 var ctrl = false;
+
+function canMakeWallXY(x, y)
+{
+	for (var j = 0; j < 3; j++)
+		for (var i = 0; i < 3; i++)
+			if (current_piece[j][i] == 1)
+			{
+				console.log(board[x+i-1][y+j-1])
+				console.log(player_mask[x+i-1][y+j-1])
+
+				if (!(getTileType(board[x+i-1][y+j-1]) == GRASS
+							|| getTileType(board[x+i-1][y+j-1]) == FIRE)
+						|| player_mask[x+i-1][y+j-1] != player)
+					return false;
+
+				for (var c = 0; c < cannons.length; c++)
+					if (cannons[c].x == x+i-1 && cannons[c].y == y+j-1)
+						return false;
+			}
+
+	return true;
+}
 
 function canMakeWall(e)
 {
@@ -519,6 +543,7 @@ function init()
 	c = a.getContext("2d");
 
 	setInterval(update, 50);
+	setInterval(doComputer, 500);
 
 	output = document.getElementById("output");
 	state_div = document.getElementById("state");
@@ -763,6 +788,150 @@ function update() {
 	}
 
 	draw();
+}
+
+function doComputer() {
+	if (state == 0) {
+		doComputerPlacePiece();
+	} else if (state == 1) {
+		doComputerPlaceCannon();
+	} else if (state == 2) {
+		doComputerFireCannonball();
+	}
+}
+
+function doComputerFireCannonball()
+{
+	if (cannons_left == 0)
+		return;
+
+	for (var i = 0; i < height; i++)
+	{
+		for (var j = 0; j < width; j++)
+		{
+			if (player_mask[i][j] != player
+					&& getTileType(board[i][j]) == WALL)
+			{
+				var a = parseInt(Math.random()*100) % 20;
+
+				if (a == 0)
+				{
+					var l = cannons.length;
+					for (var cn = 0; cn < l; cn++)
+					{
+						var c = cannons[cn];
+						if (c.fire_timer == 0)
+						{
+							var cb = new Cannonball(c.x*16, c.y*16, j*16, i*16);
+							cannonballs.push(cb);
+							c.fire_timer = 20*2;
+
+							websocket.send('cannonball ' + c.x*16 + "," + c.y*16 + "," + j*16 + "," + i*16);
+
+							return;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+function doComputerPlaceCannon()
+{
+	if (cannons_left == 0)
+		return;
+
+	for (var i = 0; i < height; i++)
+	{
+		for (var j = 0; j < width; j++)
+		{
+			if (player_mask[i][j] == player
+					&& board[i][j] == (CLOSED | GRASS))
+			{
+				var cannon_already_there = false;
+
+				for (var c = 0; c < cannons.length; c++)
+					if (cannons[c].x == j && cannons[c].y == i)
+						cannon_already_there = true;
+
+				if (!cannon_already_there)
+				{
+					websocket.send('cannon ' + j + "," + i);
+
+					cannons.push(new Cannon(j, i));
+					cannons_left--;
+
+					return;
+				}
+			}
+		}
+	}
+}
+
+function findBestFortress(f) {
+	for (var i = 0; i < height; i++)
+	{
+		for (var j = 0; j < width; j++)
+		{
+			if (player_mask[i][j] == player
+					&& board[i][j] == (OPEN | FORTRESS))
+			{
+				console.log('f = ', f);
+				if (f == 0)
+					return new Cell(i, j);
+				f--;
+			}
+		}
+	}
+
+	return null;
+}
+
+function doComputerPlacePiece() {
+	var f = 0;
+
+	while (true)
+	{
+		var fort = findBestFortress(f);
+
+		f++;
+
+		if (!fort)
+			return;
+
+		for (var i = -3; i <= 3; i++)
+		{
+			for (var j = -3; j <= 3; j++)
+			{
+				if (!(Math.abs(i) == 3 || Math.abs(j) == 3))
+					continue;
+
+				if (getPropertyType(board[fort.x+i][fort.y+j]) == OPEN)
+				{
+					// open spot, try placing piece
+
+					if (!canMakeWallXY(fort.x+i, fort.y+j))
+						continue;
+
+					for (var m = 0; m < 3; m++)
+						for (var n = 0; n < 3; n++)
+							if (current_piece[m][n] == 1)
+							{
+								websocket.send('wall ' + (fort.y+j+m-1) + "," + (fort.x+i+n-1));
+								board[fort.x+i+n-1][fort.y+j+m-1] = WALL;
+							}
+
+					newPiece();
+					figureOutProperty();
+					return;
+				}
+			}
+		}
+
+		newPiece();
+		return;
+	}
 }
 
 function draw() {
