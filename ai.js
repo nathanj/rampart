@@ -820,7 +820,9 @@ function doComputerFireCannonball()
 					for (var cn = 0; cn < l; cn++)
 					{
 						var c = cannons[cn];
-						if (c.fire_timer == 0)
+						if (player_mask[c.y][c.x] == player
+								&& getPropertyType(board[c.y][c.x]) == CLOSED
+								&& c.fire_timer == 0)
 						{
 							var cb = new Cannonball(c.x*16, c.y*16, j*16, i*16);
 							cannonballs.push(cb);
