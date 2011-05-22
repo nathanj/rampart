@@ -25,6 +25,8 @@ var cannons_left = 2;
 var mouse_x = 0;
 var mouse_y = 0;
 
+var compInt = null;
+
 var pieces = [
 [ [ 0,0,0 ],
   [ 0,1,0 ],
@@ -543,7 +545,7 @@ function init()
 	c = a.getContext("2d");
 
 	setInterval(update, 50);
-	setInterval(doComputer, 500);
+	compInt = setInterval(doComputer, 500);
 
 	output = document.getElementById("output");
 	state_div = document.getElementById("state");
@@ -648,6 +650,17 @@ function switchState() {
 
 	if (state == 3)
 		state = next_state;
+
+	if (state == 2)
+	{
+		window.clearInterval(compInt);
+		compInt = setInterval(doComputer, 300);
+	}
+	else
+	{
+		window.clearInterval(compInt);
+		compInt = setInterval(doComputer, 500);
+	}
 
 	next_state = [1,2,0][state];
 
@@ -805,6 +818,8 @@ function doComputerFireCannonball()
 	if (cannons_left == 0)
 		return;
 
+	var num_walls = 0;
+
 	for (var i = 0; i < height; i++)
 	{
 		for (var j = 0; j < width; j++)
@@ -812,9 +827,21 @@ function doComputerFireCannonball()
 			if (player_mask[i][j] != player
 					&& getTileType(board[i][j]) == WALL)
 			{
-				var a = parseInt(Math.random()*100) % 20;
+				num_walls++;
+			}
+		}
+	}
 
-				if (a == 0)
+	var skip = parseInt(Math.random()*1000) % num_walls;
+
+	for (var i = 0; i < height; i++)
+	{
+		for (var j = 0; j < width; j++)
+		{
+			if (player_mask[i][j] != player
+					&& getTileType(board[i][j]) == WALL)
+			{
+				if (skip-- == 0)
 				{
 					var l = cannons.length;
 					for (var cn = 0; cn < l; cn++)
