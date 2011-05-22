@@ -311,9 +311,6 @@ function canMakeWallXY(x, y)
 		for (var i = 0; i < 3; i++)
 			if (current_piece[j][i] == 1)
 			{
-				console.log(board[x+i-1][y+j-1])
-				console.log(player_mask[x+i-1][y+j-1])
-
 				if (!(getTileType(board[x+i-1][y+j-1]) == GRASS
 							|| getTileType(board[x+i-1][y+j-1]) == FIRE)
 						|| player_mask[x+i-1][y+j-1] != player)
@@ -906,7 +903,6 @@ function findBestFortress(f) {
 			if (player_mask[i][j] == player
 					&& board[i][j] == (OPEN | FORTRESS))
 			{
-				console.log('f = ', f);
 				if (f == 0)
 					return new Cell(i, j);
 				f--;
