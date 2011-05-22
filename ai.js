@@ -888,12 +888,29 @@ function doComputerPlaceCannon()
 	if (cannons_left == 0)
 		return;
 
+	var num_spots = 0;
+
 	for (var i = 0; i < height; i++)
 	{
 		for (var j = 0; j < width; j++)
 		{
 			if (player_mask[i][j] == player
 					&& board[i][j] == (CLOSED | GRASS))
+			{
+				num_spots++;
+			}
+		}
+	}
+
+	var skip = parseInt(Math.random()*1000) % num_spots;
+
+	for (var i = 0; i < height; i++)
+	{
+		for (var j = 0; j < width; j++)
+		{
+			if (player_mask[i][j] == player
+					&& board[i][j] == (CLOSED | GRASS)
+					&& skip-- <= 0)
 			{
 				var cannon_already_there = false;
 
