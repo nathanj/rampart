@@ -195,6 +195,23 @@ function isOpen(x, y, dx, dy)
 	alert('wut');
 }
 
+function clearFires()
+{
+	var x = 0;
+	var y = 0;
+
+	for (x = 0; x < width; x++)
+	{
+		for (y = 0; y < height; y++)
+		{
+			if (getTileType(board[y][x]) == FIRE)
+			{
+				board[y][x] = getPropertyType(board[y][x]) | GRASS;
+			}
+		}
+	}
+}
+
 function figureOutProperty()
 {
 	var x = 0;
@@ -623,6 +640,9 @@ function switchState() {
 
 	if (state == 3)
 		state = next_state;
+
+	if (state == 1)
+		clearFires();
 
 	next_state = [1,2,0][state];
 
