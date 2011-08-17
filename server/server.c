@@ -18,8 +18,6 @@
 #include "key.h"
 #include "rampart.h"
 
-#define max(x,y) ((x) > (y) ? (x) : (y))
-
 static struct list_head client_list;
 static struct event_base *base;
 
@@ -35,7 +33,7 @@ static int listen_socket(int listen_port)
 	}
 	yes = 1;
 	if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR,
-				(char *) &yes, sizeof(yes)) == -1) {
+		       (char *) &yes, sizeof(yes)) == -1) {
 		perror("setsockopt");
 		close(s);
 		return -1;
@@ -56,7 +54,7 @@ static int listen_socket(int listen_port)
 static int accept_client(int socket)
 {
 	unsigned int l = 0;
-	struct sockaddr_in client_address = {0};
+	struct sockaddr_in client_address = { 0 };
 	int r = 0;
 
 	memset(&client_address, 0, l = sizeof(client_address));
@@ -66,9 +64,14 @@ static int accept_client(int socket)
 	}
 
 	dbg("connect from %d %s\n", r,
-			inet_ntoa(client_address.sin_addr));
+	    inet_ntoa(client_address.sin_addr));
 
 	return r;
+}
+
+static int starts_with(const char *haystack, const char *needle)
+{
+	return strncmp(haystack, needle, strlen(needle)) == 0;
 }
 
 int handle_handshake(struct client *client)
@@ -78,49 +81,34 @@ int handle_handshake(struct client *client)
 	char *key1 = NULL, *key2 = NULL, *key3 = NULL;
 	char *origin = NULL;
 	char *host = NULL;
-	char response[16] = {0};
+	char response[16] = { 0 };
 	int i = 0;
 
 	start = client->in;
-	while (*start)
-	{
+	while (*start) {
 		p = strchr(start, '\r');
 
-		if (p)
-		{
-			*p++ = '\0'; /* remove \r */
-			*p++ = '\0'; /* remove \n */
+		if (p) {
+			*p++ = '\0';	/* remove \r */
+			*p++ = '\0';	/* remove \n */
 
 			/* We are at the blank line, the rest is data. */
-			if (start == p-2)
+			if (start == p - 2)
 				break;
-		}
-		else
-		{
+		} else {
 			break;
 		}
 
-		if ( strncmp(start, "Sec-WebSocket-Key1: ",
-					strlen("Sec-WebSocket-Key1: ")) == 0 )
-		{
+		if (starts_with(start, "Sec-WebSocket-Key1: ")) {
 			start += strlen("Sec-WebSocket-Key1: ");
 			key1 = strdup(start);
-		}
-		else if ( strncmp(start, "Sec-WebSocket-Key2: ",
-					strlen("Sec-WebSocket-Key2: ")) == 0 )
-		{
+		} else if (starts_with(start, "Sec-WebSocket-Key2: ")) {
 			start += strlen("Sec-WebSocket-Key2: ");
 			key2 = strdup(start);
-		}
-		else if ( strncmp(start, "Origin: ",
-					strlen("Origin: ")) == 0 )
-		{
+		} else if (starts_with(start, "Origin: ")) {
 			start += strlen("Origin: ");
 			origin = strdup(start);
-		}
-		else if ( strncmp(start, "Host: ",
-					strlen("Host: ")) == 0 )
-		{
+		} else if (starts_with(start, "Host: ")) {
 			start += strlen("Host: ");
 			host = strdup(start);
 		}
@@ -139,16 +127,18 @@ int handle_handshake(struct client *client)
 
 	compute_response(key1, key2, key3, response);
 
-	client->out_len = snprintf(client->out, BUF_SIZE,
-			"HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
-			"Upgrade: WebSocket\r\n"
-			"Connection: Upgrade\r\n"
-			"Sec-WebSocket-Origin: %s\r\n"
-			"Sec-WebSocket-Location: ws://%s/\r\n"
-			"Access-Control-Allow-Origin: null\r\n"
-			"Access-Control-Allow-Credentials: true\r\n"
-			"Access-Control-Allow-Headers: content-type\r\n"
-			"\r\n", origin, host);
+	client->out_len =
+		snprintf(client->out, BUF_SIZE,
+			 "HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
+			 "Upgrade: WebSocket\r\n"
+			 "Connection: Upgrade\r\n"
+			 "Sec-WebSocket-Origin: %s\r\n"
+			 "Sec-WebSocket-Location: ws://%s/\r\n"
+			 "Access-Control-Allow-Origin: null\r\n"
+			 "Access-Control-Allow-Credentials: true\r\n"
+			 "Access-Control-Allow-Headers: content-type\r\n"
+			 "\r\n",
+			 origin, host);
 
 	for (i = 0; i < 16; i++)
 		client->out[client->out_len++] = response[i];
@@ -168,20 +158,17 @@ int handle_handshake(struct client *client)
  * handshake or a game message. */
 int handle_input(struct client *client, struct list_head *client_list)
 {
-	if (client->finished_headers)
-	{
+	if (client->finished_headers) {
 		/* Handle game messages. */
 		char *next = client->in;
 
-		while (client->in_len > 0)
-		{
+		while (client->in_len > 0) {
 			char *in = next;
 			int len = 0;
 			char *p = NULL;
 
 			p = in;
-			while (*p != '\xff' && len < client->in_len)
-			{
+			while (*p != '\xff' && len < client->in_len) {
 				p++;
 				len++;
 			}
@@ -192,15 +179,14 @@ int handle_input(struct client *client, struct list_head *client_list)
 			assert(*p == '\xff');
 
 			*p = '\x0';
-			dbg("fd=%d is relaying: %d %d %s\n", client->fd, len, client->in_len, in+1);
+			dbg("fd=%d is relaying: %d %d %s\n", client->fd,
+			    len, client->in_len, in + 1);
 
 			handle_message(in + 1, client, client_list);
 
 			client->in_len -= len;
 		}
-	}
-	else
-	{
+	} else {
 		handle_handshake(client);
 	}
 
@@ -228,7 +214,7 @@ static void write_client(int fd, short event, void *arg)
 	struct client *client = (struct client *) arg;
 
 	dbg("write_client called with fd: %d, event: %d, arg: %p\n",
-			fd, event, arg);
+	    fd, event, arg);
 
 	len = write(client->fd, client->out, client->out_len);
 
@@ -252,10 +238,10 @@ static void read_client(int fd, short event, void *arg)
 	struct client *client = (struct client *) arg;
 
 	dbg("read_client called with fd: %d, event: %d, arg: %p\n",
-			fd, event, arg);
+	    fd, event, arg);
 
 	len = read(client->fd, client->in + client->in_len,
-			sizeof(buf) - 1);
+		   sizeof(buf) - 1);
 
 	if (len == -1) {
 		perror("read");
@@ -275,7 +261,7 @@ static void read_socket(int fd, short event, void *arg)
 	int r;
 
 	dbg("read_socket called with fd: %d, event: %d, arg: %p\n", fd,
-			event, arg);
+	    event, arg);
 
 	r = accept_client(fd);
 
@@ -284,10 +270,10 @@ static void read_socket(int fd, short event, void *arg)
 
 		client->fd = r;
 		client->ev_read = event_new(base, client->fd,
-				EV_READ | EV_PERSIST,
-				read_client, client);
+					    EV_READ | EV_PERSIST,
+					    read_client, client);
 		client->ev_write = event_new(base, client->fd,
-				EV_WRITE, write_client, client);
+					     EV_WRITE, write_client, client);
 
 		dbg("adding client %p fd=%d\n", client, client->fd);
 		list_add_tail(&(client->list), &client_list);
@@ -320,7 +306,7 @@ int main(int argc, char **argv)
 	base = event_base_new();
 
 	event_assign(&socket_ev, base, socket, EV_READ | EV_PERSIST,
-			read_socket, NULL);
+		     read_socket, NULL);
 	event_add(&socket_ev, NULL);
 
 	dbg("dispatch\n");
@@ -328,3 +314,4 @@ int main(int argc, char **argv)
 
 	exit(EXIT_SUCCESS);
 }
+

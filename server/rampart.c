@@ -6,6 +6,14 @@
 
 #include "rampart.h"
 
+/* Is other in the same game as client? */
+int other_client_in_game(struct client *client, struct client *other)
+{
+	return (client->fd != other->fd
+		&& strcmp(client->game, other->game) == 0);
+}
+
+/* Send a message to a client. */
 static void tell_client(struct client *client, const char *format, ...)
 {
 	va_list args;
@@ -14,8 +22,8 @@ static void tell_client(struct client *client, const char *format, ...)
 
 	client->out[client->out_len++] = '\0';
 	client->out_len +=
-		vsnprintf(client->out + client->out_len, BUF_SIZE, format,
-			  args);
+		vsnprintf(client->out + client->out_len, BUF_SIZE,
+			  format, args);
 	client->out[client->out_len++] = '\xff';
 
 	dbg("adding event write\n");
@@ -26,38 +34,44 @@ static void tell_client(struct client *client, const char *format, ...)
 
 /* Client has joined a game. Give him a player number. */
 int handle_join_message(const char *in, struct client *client,
-		struct list_head *client_list)
+			struct list_head *client_list)
 {
 	struct client *other = NULL;
 
 	snprintf(client->game, 32, "%s", in + 5);
 	client->player = 1;
 
-	/* Figure out this client's player number. */
-again:
-	list_for_each_entry(other, client_list, list)
-	{
-		if (client->fd != other->fd
-				&& strcmp(client->game, other->game) == 0
-				&& client->player == other->player)
-		{
-			client->player++;
-			goto again;
+	/* Set the player number to max(clients in game) + 1. */
+	list_for_each_entry(other, client_list, list) {
+		if (other_client_in_game(client, other)
+		    && client->player <= other->player) {
+			client->player = other->player + 1;
 		}
 	}
 
 	dbg("client %p has joined game '%s' as player %d\n",
-			client, client->game, client->player);
+	    client, client->game, client->player);
 
 	tell_client(client, "player %d", client->player);
 
 	return 0;
 }
 
+/* Is the other player in this game ready? */
+static int other_player_is_ready(struct client *client,
+				 struct client *other)
+{
+	return (client->fd != other->fd
+		&& strcmp(client->game, other->game) == 0
+		&& client->player != other->player
+		&& other->ready_for_next_state
+		&& (other->player == 1 || other->player == 2));
+}
+
 /* Client is ready for the next state. Record it. If both players are
  * ready, send a go message to all clients of the game. */
 int handle_ready_message(const char *in, struct client *client,
-		struct list_head *client_list, int game_over)
+			 struct list_head *client_list, int game_over)
 {
 	struct client *other = NULL;
 	int ready = 0;
@@ -65,15 +79,8 @@ int handle_ready_message(const char *in, struct client *client,
 	client->ready_for_next_state = 1;
 
 	/* See if the other player is ready. */
-	list_for_each_entry(other, client_list, list)
-	{
-		if (client->fd != other->fd
-				&& strcmp(client->game, other->game) == 0
-				&& client->player != other->player
-				&& other->ready_for_next_state
-				&& (other->player == 1
-					|| other->player == 2))
-		{
+	list_for_each_entry(other, client_list, list) {
+		if (other_player_is_ready(client, other)) {
 			ready = 1;
 			break;
 		}
@@ -88,8 +95,7 @@ int handle_ready_message(const char *in, struct client *client,
 		dbg("client=%p other=%p\n", client, other);
 		if (strcmp(client->game, other->game) == 0) {
 			other->ready_for_next_state = 0;
-			tell_client(other, game_over
-				    ?  "newgame" : "go");
+			tell_client(other, game_over ? "newgame" : "go");
 		}
 	}
 
@@ -98,22 +104,15 @@ int handle_ready_message(const char *in, struct client *client,
 
 /* Standard game message. Relay to other clients of the same game. */
 int handle_normal_message(const char *in, struct client *client,
-		struct list_head *client_list)
+			  struct list_head *client_list)
 {
 	struct client *other = NULL;
 
-	dbg("sending %s to everyone\n", in+1);
+	dbg("sending %s to everyone\n", in);
 
-	list_for_each_entry(other, client_list, list)
-	{
-		if (client->fd != other->fd
-				&& strcmp(client->game, other->game) == 0)
-		{
-			int len = strlen(in+1) + 2;
-
-			memcpy(other->out + other->out_len, in, len);
-			other->out_len += len;
-			other->out[other->out_len-1] = '\xff';
+	list_for_each_entry(other, client_list, list) {
+		if (other_client_in_game(client, other)) {
+			tell_client(other, in);
 			dbg("fd=%d len=%d\n", other->fd, other->out_len);
 		}
 	}
@@ -123,7 +122,7 @@ int handle_normal_message(const char *in, struct client *client,
 
 /* Handle game messages. */
 int handle_message(const char *in, struct client *client,
-		struct list_head *client_list)
+		   struct list_head *client_list)
 {
 	dbg("msg: %s\n", in);
 	if (strncmp(in, "join ", strlen("join ")) == 0)
