@@ -11,12 +11,17 @@
 #include <errno.h>
 #include <assert.h>
 
+#include <event.h>
+
 #include "list.h"
 
 #include "key.h"
 #include "rampart.h"
 
 #define max(x,y) ((x) > (y) ? (x) : (y))
+
+static struct list_head client_list;
+static struct event_base *base;
 
 static int listen_socket(int listen_port)
 {
@@ -65,14 +70,6 @@ static int accept_client(int socket)
 
 	return r;
 }
-
-#define SHUT(x) do {                \
-	if ((x) >= 0) {                 \
-		shutdown((x), SHUT_RDWR);   \
-		close((x));                 \
-		(x) = -1;                   \
-	}                               \
-} while (0)
 
 int handle_handshake(struct client *client)
 {
@@ -158,6 +155,9 @@ int handle_handshake(struct client *client)
 
 	client->out[client->out_len] = '\0';
 
+	dbg("adding event write\n");
+	event_add(client->ev_write, NULL);
+
 	client->finished_headers = 1;
 	client->in_len = 0;
 
@@ -194,7 +194,7 @@ int handle_input(struct client *client, struct list_head *client_list)
 			*p = '\x0';
 			dbg("fd=%d is relaying: %d %d %s\n", client->fd, len, client->in_len, in+1);
 
-			handle_message(in, client, client_list);
+			handle_message(in + 1, client, client_list);
 
 			client->in_len -= len;
 		}
@@ -207,119 +207,124 @@ int handle_input(struct client *client, struct list_head *client_list)
 	return 0;
 }
 
+static void delete_client(struct client *client)
+{
+	dbg("deleting client %p %p\n", client, &client->list);
+
+	list_del(&client->list);
+
+	event_free(client->ev_read);
+	event_free(client->ev_write);
+
+	shutdown(client->fd, SHUT_RDWR);
+	close(client->fd);
+
+	free(client);
+}
+
+static void write_client(int fd, short event, void *arg)
+{
+	int len;
+	struct client *client = (struct client *) arg;
+
+	dbg("write_client called with fd: %d, event: %d, arg: %p\n",
+			fd, event, arg);
+
+	len = write(client->fd, client->out, client->out_len);
+
+	if (len == -1) {
+		perror("write");
+		return;
+	} else if (len == 0) {
+		dbg("fd %d closed\n", client->fd);
+		delete_client(client);
+		return;
+	}
+
+	client->out_len = 0;
+	client->out[0] = '\0';
+}
+
+static void read_client(int fd, short event, void *arg)
+{
+	char buf[255];
+	int len;
+	struct client *client = (struct client *) arg;
+
+	dbg("read_client called with fd: %d, event: %d, arg: %p\n",
+			fd, event, arg);
+
+	len = read(client->fd, client->in + client->in_len,
+			sizeof(buf) - 1);
+
+	if (len == -1) {
+		perror("read");
+		return;
+	} else if (len == 0) {
+		dbg("fd %d closed\n", client->fd);
+		delete_client(client);
+		return;
+	}
+
+	client->in_len += len;
+	handle_input(client, &client_list);
+}
+
+static void read_socket(int fd, short event, void *arg)
+{
+	int r;
+
+	dbg("read_socket called with fd: %d, event: %d, arg: %p\n", fd,
+			event, arg);
+
+	r = accept_client(fd);
+
+	if (r != -1) {
+		struct client *client = calloc(1, sizeof(struct client));
+
+		client->fd = r;
+		client->ev_read = event_new(base, client->fd,
+				EV_READ | EV_PERSIST,
+				read_client, client);
+		client->ev_write = event_new(base, client->fd,
+				EV_WRITE, write_client, client);
+
+		dbg("adding client %p fd=%d\n", client, client->fd);
+		list_add_tail(&(client->list), &client_list);
+
+		event_add(client->ev_read, NULL);
+	}
+}
+
+
+static void stop()
+{
+	event_base_free(base);
+	exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char **argv)
 {
 	int socket = -1;
-	struct client *client = NULL;
-	struct list_head *pos = NULL, *q = NULL;
+	struct event socket_ev;
 
-	LIST_HEAD(client_list);
+	INIT_LIST_HEAD(&client_list);
 
+	signal(SIGINT, stop);
 	signal(SIGPIPE, SIG_IGN);
 
 	socket = listen_socket(9999);
 	if (socket == -1)
 		exit(EXIT_FAILURE);
 
-	for (;;) {
-		int r, nfds = 0;
-		fd_set rd, wr, er;
+	base = event_base_new();
 
-		FD_ZERO(&rd);
-		FD_ZERO(&wr);
-		FD_ZERO(&er);
-		FD_SET(socket, &rd);
-		nfds = max(nfds, socket);
+	event_assign(&socket_ev, base, socket, EV_READ | EV_PERSIST,
+			read_socket, NULL);
+	event_add(&socket_ev, NULL);
 
-		/* Build up the fd_sets for select. */
-		list_for_each_entry(client, &client_list, list)
-		{
-			if (client->fd >= 0)
-			{
-				FD_SET(client->fd, &rd);
-				FD_SET(client->fd, &er);
-				if (client->out_len > 0)
-				{
-					FD_SET(client->fd, &wr);
-					dbg("fd=%d len=%d good for writing!\n",
-							client->fd, client->out_len);
-				}
-				nfds = max(nfds, client->fd);
-			}
-		}
-
-		r = select(nfds + 1, &rd, &wr, &er, NULL);
-
-		if (r == -1 && errno == EINTR)
-			continue;
-
-		if (r == -1) {
-			perror("select()");
-			exit(EXIT_FAILURE);
-		}
-
-		if (FD_ISSET(socket, &rd)) {
-			r = accept_client(socket);
-
-			if (r != -1)
-			{
-				struct client *client = calloc(1, sizeof(struct client));
-
-				client->fd = r;
-
-				dbg("adding client %p fd=%d\n", client, client->fd);
-				list_add_tail(&(client->list), &client_list);
-			}
-		}
-
-		list_for_each_entry(client, &client_list, list)
-		{
-			/* Check error. */
-			if (client->fd >= 0 && FD_ISSET(client->fd, &er)) {
-				char c;
-
-				r = recv(client->fd, &c, 1, MSG_OOB);
-				if (r < 1)
-					SHUT(client->fd);
-			}
-
-			/* Check read. */
-			if (client->fd >= 0 && FD_ISSET(client->fd, &rd)) {
-				r = read(client->fd, client->in + client->in_len, BUF_SIZE);
-				if (r < 1)
-				{
-					SHUT(client->fd);
-				}
-				else
-				{
-					client->in_len += r;
-					handle_input(client, &client_list);
-				}
-			}
-
-			/* Check write. */
-			if (client->fd >= 0 && FD_ISSET(client->fd, &wr)) {
-				r = write(client->fd, client->out, client->out_len);
-				if (r < 1)
-					SHUT(client->fd);
-
-				client->out_len = 0;
-				client->out[0] = '\0';
-			}
-		}
-
-		/* Delete all clients which no longer have an open socket. */
-		list_for_each_safe(pos, q, &client_list)
-		{
-			client = list_entry(pos, struct client, list);
-			if (client->fd == -1)
-			{
-				dbg("deleting client %p\n", client);
-				list_del(pos);
-				free(client);
-			}
-		}
-	}
+	dbg("dispatch\n");
+	event_base_dispatch(base);
 
 	exit(EXIT_SUCCESS);
 }

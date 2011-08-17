@@ -1,7 +1,28 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
+
+#include <event.h>
 
 #include "rampart.h"
+
+static void tell_client(struct client *client, const char *format, ...)
+{
+	va_list args;
+
+	va_start(args, format);
+
+	client->out[client->out_len++] = '\0';
+	client->out_len +=
+		vsnprintf(client->out + client->out_len, BUF_SIZE, format,
+			  args);
+	client->out[client->out_len++] = '\xff';
+
+	dbg("adding event write\n");
+	event_add(client->ev_write, NULL);
+
+	va_end(args);
+}
 
 /* Client has joined a game. Give him a player number. */
 int handle_join_message(const char *in, struct client *client,
@@ -9,7 +30,7 @@ int handle_join_message(const char *in, struct client *client,
 {
 	struct client *other = NULL;
 
-	snprintf(client->game, 32, "%s", in+6);
+	snprintf(client->game, 32, "%s", in + 5);
 	client->player = 1;
 
 	/* Figure out this client's player number. */
@@ -28,9 +49,7 @@ again:
 	dbg("client %p has joined game '%s' as player %d\n",
 			client, client->game, client->player);
 
-	client->out[client->out_len++] = '\0';
-	client->out_len += snprintf(client->out+client->out_len, BUF_SIZE,
-			"player %d\xff", client->player);
+	tell_client(client, "player %d", client->player);
 
 	return 0;
 }
@@ -60,29 +79,17 @@ int handle_ready_message(const char *in, struct client *client,
 		}
 	}
 
-	/* If ready, send go to all clients of the game. If gameover, then
-	 * start a new game. */
-	if (ready)
-	{
-		list_for_each_entry(other, client_list, list)
-		{
-			dbg("client=%p other=%p\n", client, other);
-			if (strcmp(client->game, other->game) == 0)
-			{
-				other->ready_for_next_state = 0;
+	if (!ready)
+		return 0;
 
-				other->out[other->out_len++] = '\0';
-				if (game_over)
-				{
-					other->out_len += snprintf(other->out+other->out_len,
-							BUF_SIZE, "newgame\xff");
-				}
-				else
-				{
-					other->out_len += snprintf(other->out+other->out_len,
-							BUF_SIZE, "go\xff");
-				}
-			}
+	/* If ready, send go to all clients of the game. If gameover,
+	 * then start a new game. */
+	list_for_each_entry(other, client_list, list) {
+		dbg("client=%p other=%p\n", client, other);
+		if (strcmp(client->game, other->game) == 0) {
+			other->ready_for_next_state = 0;
+			tell_client(other, game_over
+				    ?  "newgame" : "go");
 		}
 	}
 
@@ -118,12 +125,12 @@ int handle_normal_message(const char *in, struct client *client,
 int handle_message(const char *in, struct client *client,
 		struct list_head *client_list)
 {
-	dbg("msg: %s\n", in+1);
-	if (strncmp(in+1, "join ", strlen("join ")) == 0)
+	dbg("msg: %s\n", in);
+	if (strncmp(in, "join ", strlen("join ")) == 0)
 		handle_join_message(in, client, client_list);
-	else if (strncmp(in+1, "ready", strlen("ready")) == 0)
+	else if (strncmp(in, "ready", strlen("ready")) == 0)
 		handle_ready_message(in, client, client_list, 0);
-	else if (strncmp(in+1, "gameover", strlen("gameover")) == 0)
+	else if (strncmp(in, "gameover", strlen("gameover")) == 0)
 		handle_ready_message(in, client, client_list, 1);
 	else
 		handle_normal_message(in, client, client_list);

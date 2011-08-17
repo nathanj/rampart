@@ -1,5 +1,7 @@
+
 CC=gcc
-CFLAGS=--std=c99 -Wall -g -D_GNU_SOURCE -O0 -I. -I..
+CFLAGS=--std=gnu99 -Wall -g -O0 -I. -I.. `pkg-config --cflags libevent`
+LDFLAGS=`pkg-config --libs libevent`
 
 all: server
 server: server.o key.o md5.o rampart.o
