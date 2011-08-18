@@ -972,8 +972,17 @@ function doComputerPlacePiece() {
 				if (getPropertyType(board[fort.x+i][fort.y+j]) == OPEN)
 				{
 					// open spot, try placing piece
+					var found_it = false;
 
-					if (!canMakeWallXY(fort.x+i, fort.y+j))
+					for (var k = 0; k < 3; k++)
+					{
+						rotatePiece(1);
+						found_it = canMakeWallXY(fort.x+i, fort.y+j);
+						if (found_it)
+							break;
+					}
+
+					if (!found_it)
 						continue;
 
 					for (var m = 0; m < 3; m++)
