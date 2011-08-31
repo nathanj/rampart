@@ -5,54 +5,38 @@
 #include <assert.h>
 #include <arpa/inet.h>
 
-#include "md5.h"
+#include "sha1.h"
+#include "b64.h"
 
-/* Decodes a WebSocket key into its big endian value. */
-static unsigned int decode(const char *key)
-{
-	const char *p = key;
-	unsigned int key_number = 0;
-	unsigned int spaces = 0;
-
-	while (*p) {
-		if (isdigit(*p))
-			key_number = key_number * 10 + *p - '0';
-		if (*p == ' ')
-			spaces++;
-		p++;
-	}
-
-	assert(spaces > 0);
-
-	return htonl(key_number / spaces);
-}
+#define GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+#define FULL_KEY_SIZE 32 + sizeof(GUID)
 
 /* Computes the server's response based on the three keys. The response
- * is stored in response which should be 16 bytes in length. */
-void compute_response(const char *key1, const char *key2,
-		      const char *key3, char *response)
+ * is stored in response which should be at least 28 bytes in length. */
+void compute_response(const char *key, char *response)
 {
-	unsigned int key_number_1 = 0;
-	unsigned int key_number_2 = 0;
-	char key[16] = { 0 };
-	MD5_CTX mdContext;
+	char full_key[FULL_KEY_SIZE];
+	int len;
+	int rc;
+	SHA1Context sha1_context;
 
-	assert(key1);
-	assert(key2);
-	assert(key3);
-	assert(response);
+	len = snprintf(full_key, FULL_KEY_SIZE, "%s%s", key, GUID);
+	assert(len < FULL_KEY_SIZE);
 
-	key_number_1 = decode(key1);
-	key_number_2 = decode(key2);
+	SHA1Reset(&sha1_context);
+	SHA1Input(&sha1_context, (unsigned char *) full_key, len);
+	rc = SHA1Result(&sha1_context);
 
-	memcpy(key,     &key_number_1, 4);
-	memcpy(key + 4, &key_number_2, 4);
-	memcpy(key + 8, key3,          8);
+	assert(rc == 1);
 
-	MD5Init(&mdContext);
-	MD5Update(&mdContext, key, 16);
-	MD5Final(&mdContext);
+	for (int i = 0; i < 5; i++) {
+		sha1_context.Message_Digest[i] =
+			ntohl(sha1_context.Message_Digest[i]);
+	}
 
-	memcpy(response, mdContext.digest, 16);
+
+	base64encode((unsigned char *) sha1_context.Message_Digest,
+		     (unsigned char *) response,
+		     20);
 }
 

@@ -16,15 +16,16 @@ int other_client_in_game(struct client *client, struct client *other)
 /* Send a message to a client. */
 static void tell_client(struct client *client, const char *format, ...)
 {
+	int len;
 	va_list args;
 
 	va_start(args, format);
 
-	client->out[client->out_len++] = '\0';
-	client->out_len +=
-		vsnprintf(client->out + client->out_len, BUF_SIZE,
-			  format, args);
-	client->out[client->out_len++] = '\xff';
+	client->out[client->out_len++] = '\x81';
+	len = vsnprintf(client->out + client->out_len + 1, BUF_SIZE,
+			format, args);
+	client->out[client->out_len++] = (unsigned char) len;
+	client->out_len += len;
 
 	dbg("adding event write\n");
 	event_add(client->ev_write, NULL);

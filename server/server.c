@@ -74,15 +74,15 @@ static int starts_with(const char *haystack, const char *needle)
 	return strncmp(haystack, needle, strlen(needle)) == 0;
 }
 
-int handle_handshake(struct client *client)
+static int handle_handshake(struct client *client)
 {
 	/* Send the response. */
 	char *p = NULL, *start = NULL;
-	char *key1 = NULL, *key2 = NULL, *key3 = NULL;
+	char *key = NULL;
 	char *origin = NULL;
 	char *host = NULL;
-	char response[16] = { 0 };
-	int i = 0;
+	char response[32] = { 0 };
+	int version = 0;
 
 	start = client->in;
 	while (*start) {
@@ -99,15 +99,15 @@ int handle_handshake(struct client *client)
 			break;
 		}
 
-		if (starts_with(start, "Sec-WebSocket-Key1: ")) {
-			start += strlen("Sec-WebSocket-Key1: ");
-			key1 = strdup(start);
-		} else if (starts_with(start, "Sec-WebSocket-Key2: ")) {
-			start += strlen("Sec-WebSocket-Key2: ");
-			key2 = strdup(start);
-		} else if (starts_with(start, "Origin: ")) {
-			start += strlen("Origin: ");
+		if (starts_with(start, "Sec-WebSocket-Key: ")) {
+			start += strlen("Sec-WebSocket-Key: ");
+			key = strdup(start);
+		} else if (starts_with(start, "Sec-WebSocket-Origin: ")) {
+			start += strlen("Sec-WebSocket-Origin: ");
 			origin = strdup(start);
+		} else if (starts_with(start, "Sec-WebSocket-Version: ")) {
+			start += strlen("Sec-WebSocket-Version: ");
+			version = atoi(start);
 		} else if (starts_with(start, "Host: ")) {
 			start += strlen("Host: ");
 			host = strdup(start);
@@ -116,32 +116,26 @@ int handle_handshake(struct client *client)
 		start = p;
 	}
 
-	if (p)
-		key3 = strdup(p);
-
-	assert(key1);
-	assert(key2);
-	assert(key3);
+	assert(version >= 8);
+	assert(key);
 	assert(origin);
 	assert(host);
 
-	compute_response(key1, key2, key3, response);
+	compute_response(key, response);
 
 	client->out_len =
 		snprintf(client->out, BUF_SIZE,
-			 "HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
+			 "HTTP/1.1 101 Switching Protocols\r\n"
 			 "Upgrade: WebSocket\r\n"
 			 "Connection: Upgrade\r\n"
 			 "Sec-WebSocket-Origin: %s\r\n"
 			 "Sec-WebSocket-Location: ws://%s/\r\n"
+			 "Sec-WebSocket-Accept: %s\r\n"
 			 "Access-Control-Allow-Origin: null\r\n"
 			 "Access-Control-Allow-Credentials: true\r\n"
 			 "Access-Control-Allow-Headers: content-type\r\n"
 			 "\r\n",
-			 origin, host);
-
-	for (i = 0; i < 16; i++)
-		client->out[client->out_len++] = response[i];
+			 origin, host, response);
 
 	client->out[client->out_len] = '\0';
 
@@ -154,38 +148,52 @@ int handle_handshake(struct client *client)
 	return 0;
 }
 
+/* Handles a standard websocket frame (sort of). We can cheat a bit here
+ * since we always expect a non-fragmented text frame. */
+static int handle_websocket_frame(struct client *client,
+				  struct list_head *client_list)
+{
+	char *in = client->in;
+	char *buffer;
+	int i;
+	unsigned char mask[4];
+	unsigned int packet_length = 0;
+
+	while (client->in_len > 0) {
+		/* Expect a finished text frame. */
+		assert(in[0] == '\x81');
+
+		packet_length = ((unsigned char) in[1]) & 0x7f;
+
+		mask[0] = in[2];
+		mask[1] = in[3];
+		mask[2] = in[4];
+		mask[3] = in[5];
+
+		/* Unmask the payload. */
+		for (i = 0; i < packet_length; i++)
+			in[6 + i] ^= mask[i % 4];
+
+		asprintf(&buffer, "%.*s", packet_length, in + 6);
+
+		dbg("fd=%d is relaying: %s\n", client->fd, buffer);
+
+		handle_message(buffer, client, client_list);
+
+		client->in_len -= packet_length + 6;
+		in += packet_length + 6;
+		free(buffer);
+	}
+
+	return 0;
+}
+
 /* Handle input received from a client. Input can be either the initial
  * handshake or a game message. */
-int handle_input(struct client *client, struct list_head *client_list)
+static int handle_input(struct client *client, struct list_head *client_list)
 {
 	if (client->finished_headers) {
-		/* Handle game messages. */
-		char *next = client->in;
-
-		while (client->in_len > 0) {
-			char *in = next;
-			int len = 0;
-			char *p = NULL;
-
-			p = in;
-			while (*p != '\xff' && len < client->in_len) {
-				p++;
-				len++;
-			}
-
-			len++;
-			next = p + 1;
-
-			assert(*p == '\xff');
-
-			*p = '\x0';
-			dbg("fd=%d is relaying: %d %d %s\n", client->fd,
-			    len, client->in_len, in + 1);
-
-			handle_message(in + 1, client, client_list);
-
-			client->in_len -= len;
-		}
+		handle_websocket_frame(client, client_list);
 	} else {
 		handle_handshake(client);
 	}
