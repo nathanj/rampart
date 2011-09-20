@@ -11,12 +11,15 @@
 #include <errno.h>
 #include <assert.h>
 
+#include <event.h>
+
 #include "list.h"
 
 #include "key.h"
 #include "rampart.h"
 
-#define max(x,y) ((x) > (y) ? (x) : (y))
+static struct list_head client_list;
+static struct event_base *base;
 
 static int listen_socket(int listen_port)
 {
@@ -30,7 +33,7 @@ static int listen_socket(int listen_port)
 	}
 	yes = 1;
 	if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR,
-				(char *) &yes, sizeof(yes)) == -1) {
+		       (char *) &yes, sizeof(yes)) == -1) {
 		perror("setsockopt");
 		close(s);
 		return -1;
@@ -51,7 +54,7 @@ static int listen_socket(int listen_port)
 static int accept_client(int socket)
 {
 	unsigned int l = 0;
-	struct sockaddr_in client_address = {0};
+	struct sockaddr_in client_address = { 0 };
 	int r = 0;
 
 	memset(&client_address, 0, l = sizeof(client_address));
@@ -61,69 +64,51 @@ static int accept_client(int socket)
 	}
 
 	dbg("connect from %d %s\n", r,
-			inet_ntoa(client_address.sin_addr));
+	    inet_ntoa(client_address.sin_addr));
 
 	return r;
 }
 
-#define SHUT(x) do {                \
-	if ((x) >= 0) {                 \
-		shutdown((x), SHUT_RDWR);   \
-		close((x));                 \
-		(x) = -1;                   \
-	}                               \
-} while (0)
+static int starts_with(const char *haystack, const char *needle)
+{
+	return strncmp(haystack, needle, strlen(needle)) == 0;
+}
 
-int handle_handshake(struct client *client)
+static int handle_handshake(struct client *client)
 {
 	/* Send the response. */
 	char *p = NULL, *start = NULL;
-	char *key1 = NULL, *key2 = NULL, *key3 = NULL;
+	char *key = NULL;
 	char *origin = NULL;
 	char *host = NULL;
-	char response[16] = {0};
-	int i = 0;
+	char response[32] = { 0 };
+	int version = 0;
 
 	start = client->in;
-	while (*start)
-	{
+	while (*start) {
 		p = strchr(start, '\r');
 
-		if (p)
-		{
-			*p++ = '\0'; /* remove \r */
-			*p++ = '\0'; /* remove \n */
+		if (p) {
+			*p++ = '\0';	/* remove \r */
+			*p++ = '\0';	/* remove \n */
 
 			/* We are at the blank line, the rest is data. */
-			if (start == p-2)
+			if (start == p - 2)
 				break;
-		}
-		else
-		{
+		} else {
 			break;
 		}
 
-		if ( strncmp(start, "Sec-WebSocket-Key1: ",
-					strlen("Sec-WebSocket-Key1: ")) == 0 )
-		{
-			start += strlen("Sec-WebSocket-Key1: ");
-			key1 = strdup(start);
-		}
-		else if ( strncmp(start, "Sec-WebSocket-Key2: ",
-					strlen("Sec-WebSocket-Key2: ")) == 0 )
-		{
-			start += strlen("Sec-WebSocket-Key2: ");
-			key2 = strdup(start);
-		}
-		else if ( strncmp(start, "Origin: ",
-					strlen("Origin: ")) == 0 )
-		{
-			start += strlen("Origin: ");
+		if (starts_with(start, "Sec-WebSocket-Key: ")) {
+			start += strlen("Sec-WebSocket-Key: ");
+			key = strdup(start);
+		} else if (starts_with(start, "Sec-WebSocket-Origin: ")) {
+			start += strlen("Sec-WebSocket-Origin: ");
 			origin = strdup(start);
-		}
-		else if ( strncmp(start, "Host: ",
-					strlen("Host: ")) == 0 )
-		{
+		} else if (starts_with(start, "Sec-WebSocket-Version: ")) {
+			start += strlen("Sec-WebSocket-Version: ");
+			version = atoi(start);
+		} else if (starts_with(start, "Host: ")) {
 			start += strlen("Host: ");
 			host = strdup(start);
 		}
@@ -131,32 +116,31 @@ int handle_handshake(struct client *client)
 		start = p;
 	}
 
-	if (p)
-		key3 = strdup(p);
-
-	assert(key1);
-	assert(key2);
-	assert(key3);
+	assert(version >= 8);
+	assert(key);
 	assert(origin);
 	assert(host);
 
-	compute_response(key1, key2, key3, response);
+	compute_response(key, response);
 
-	client->out_len = snprintf(client->out, BUF_SIZE,
-			"HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
-			"Upgrade: WebSocket\r\n"
-			"Connection: Upgrade\r\n"
-			"Sec-WebSocket-Origin: %s\r\n"
-			"Sec-WebSocket-Location: ws://%s/\r\n"
-			"Access-Control-Allow-Origin: null\r\n"
-			"Access-Control-Allow-Credentials: true\r\n"
-			"Access-Control-Allow-Headers: content-type\r\n"
-			"\r\n", origin, host);
-
-	for (i = 0; i < 16; i++)
-		client->out[client->out_len++] = response[i];
+	client->out_len =
+		snprintf(client->out, BUF_SIZE,
+			 "HTTP/1.1 101 Switching Protocols\r\n"
+			 "Upgrade: WebSocket\r\n"
+			 "Connection: Upgrade\r\n"
+			 "Sec-WebSocket-Origin: %s\r\n"
+			 "Sec-WebSocket-Location: ws://%s/\r\n"
+			 "Sec-WebSocket-Accept: %s\r\n"
+			 "Access-Control-Allow-Origin: null\r\n"
+			 "Access-Control-Allow-Credentials: true\r\n"
+			 "Access-Control-Allow-Headers: content-type\r\n"
+			 "\r\n",
+			 origin, host, response);
 
 	client->out[client->out_len] = '\0';
+
+	dbg("adding event write\n");
+	event_add(client->ev_write, NULL);
 
 	client->finished_headers = 1;
 	client->in_len = 0;
@@ -164,162 +148,178 @@ int handle_handshake(struct client *client)
 	return 0;
 }
 
+/* Handles a standard websocket frame (sort of). We can cheat a bit here
+ * since we always expect a non-fragmented text frame. */
+static int handle_websocket_frame(struct client *client,
+				  struct list_head *client_list)
+{
+	char *in = client->in;
+	char *buffer;
+	int i;
+	unsigned char mask[4];
+	unsigned int packet_length = 0;
+
+	while (client->in_len > 0) {
+		/* Expect a finished text frame. */
+		assert(in[0] == '\x81');
+
+		packet_length = ((unsigned char) in[1]) & 0x7f;
+
+		mask[0] = in[2];
+		mask[1] = in[3];
+		mask[2] = in[4];
+		mask[3] = in[5];
+
+		/* Unmask the payload. */
+		for (i = 0; i < packet_length; i++)
+			in[6 + i] ^= mask[i % 4];
+
+		asprintf(&buffer, "%.*s", packet_length, in + 6);
+
+		dbg("fd=%d is relaying: %s\n", client->fd, buffer);
+
+		handle_message(buffer, client, client_list);
+
+		client->in_len -= packet_length + 6;
+		in += packet_length + 6;
+		free(buffer);
+	}
+
+	return 0;
+}
+
 /* Handle input received from a client. Input can be either the initial
  * handshake or a game message. */
-int handle_input(struct client *client, struct list_head *client_list)
+static int handle_input(struct client *client, struct list_head *client_list)
 {
-	if (client->finished_headers)
-	{
-		/* Handle game messages. */
-		char *next = client->in;
-
-		while (client->in_len > 0)
-		{
-			char *in = next;
-			int len = 0;
-			char *p = NULL;
-
-			p = in;
-			while (*p != '\xff' && len < client->in_len)
-			{
-				p++;
-				len++;
-			}
-
-			len++;
-			next = p + 1;
-
-			assert(*p == '\xff');
-
-			*p = '\x0';
-			dbg("fd=%d is relaying: %d %d %s\n", client->fd, len, client->in_len, in+1);
-
-			handle_message(in, client, client_list);
-
-			client->in_len -= len;
-		}
-	}
-	else
-	{
+	if (client->finished_headers) {
+		handle_websocket_frame(client, client_list);
+	} else {
 		handle_handshake(client);
 	}
 
 	return 0;
 }
 
+static void delete_client(struct client *client)
+{
+	dbg("deleting client %p %p\n", client, &client->list);
+
+	list_del(&client->list);
+
+	event_free(client->ev_read);
+	event_free(client->ev_write);
+
+	shutdown(client->fd, SHUT_RDWR);
+	close(client->fd);
+
+	free(client);
+}
+
+static void write_client(int fd, short event, void *arg)
+{
+	int len;
+	struct client *client = (struct client *) arg;
+
+	dbg("write_client called with fd: %d, event: %d, arg: %p\n",
+	    fd, event, arg);
+
+	len = write(client->fd, client->out, client->out_len);
+
+	if (len == -1) {
+		perror("write");
+		return;
+	} else if (len == 0) {
+		dbg("fd %d closed\n", client->fd);
+		delete_client(client);
+		return;
+	}
+
+	client->out_len = 0;
+	client->out[0] = '\0';
+}
+
+static void read_client(int fd, short event, void *arg)
+{
+	char buf[255];
+	int len;
+	struct client *client = (struct client *) arg;
+
+	dbg("read_client called with fd: %d, event: %d, arg: %p\n",
+	    fd, event, arg);
+
+	len = read(client->fd, client->in + client->in_len,
+		   sizeof(buf) - 1);
+
+	if (len == -1) {
+		perror("read");
+		return;
+	} else if (len == 0) {
+		dbg("fd %d closed\n", client->fd);
+		delete_client(client);
+		return;
+	}
+
+	client->in_len += len;
+	handle_input(client, &client_list);
+}
+
+static void read_socket(int fd, short event, void *arg)
+{
+	int r;
+
+	dbg("read_socket called with fd: %d, event: %d, arg: %p\n", fd,
+	    event, arg);
+
+	r = accept_client(fd);
+
+	if (r != -1) {
+		struct client *client = calloc(1, sizeof(struct client));
+
+		client->fd = r;
+		client->ev_read = event_new(base, client->fd,
+					    EV_READ | EV_PERSIST,
+					    read_client, client);
+		client->ev_write = event_new(base, client->fd,
+					     EV_WRITE, write_client, client);
+
+		dbg("adding client %p fd=%d\n", client, client->fd);
+		list_add_tail(&(client->list), &client_list);
+
+		event_add(client->ev_read, NULL);
+	}
+}
+
+
+static void stop()
+{
+	event_base_free(base);
+	exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char **argv)
 {
 	int socket = -1;
-	struct client *client = NULL;
-	struct list_head *pos = NULL, *q = NULL;
+	struct event socket_ev;
 
-	LIST_HEAD(client_list);
+	INIT_LIST_HEAD(&client_list);
 
+	signal(SIGINT, stop);
 	signal(SIGPIPE, SIG_IGN);
 
 	socket = listen_socket(9999);
 	if (socket == -1)
 		exit(EXIT_FAILURE);
 
-	for (;;) {
-		int r, nfds = 0;
-		fd_set rd, wr, er;
+	base = event_base_new();
 
-		FD_ZERO(&rd);
-		FD_ZERO(&wr);
-		FD_ZERO(&er);
-		FD_SET(socket, &rd);
-		nfds = max(nfds, socket);
+	event_assign(&socket_ev, base, socket, EV_READ | EV_PERSIST,
+		     read_socket, NULL);
+	event_add(&socket_ev, NULL);
 
-		/* Build up the fd_sets for select. */
-		list_for_each_entry(client, &client_list, list)
-		{
-			if (client->fd >= 0)
-			{
-				FD_SET(client->fd, &rd);
-				FD_SET(client->fd, &er);
-				if (client->out_len > 0)
-				{
-					FD_SET(client->fd, &wr);
-					dbg("fd=%d len=%d good for writing!\n",
-							client->fd, client->out_len);
-				}
-				nfds = max(nfds, client->fd);
-			}
-		}
-
-		r = select(nfds + 1, &rd, &wr, &er, NULL);
-
-		if (r == -1 && errno == EINTR)
-			continue;
-
-		if (r == -1) {
-			perror("select()");
-			exit(EXIT_FAILURE);
-		}
-
-		if (FD_ISSET(socket, &rd)) {
-			r = accept_client(socket);
-
-			if (r != -1)
-			{
-				struct client *client = calloc(1, sizeof(struct client));
-
-				client->fd = r;
-
-				dbg("adding client %p fd=%d\n", client, client->fd);
-				list_add_tail(&(client->list), &client_list);
-			}
-		}
-
-		list_for_each_entry(client, &client_list, list)
-		{
-			/* Check error. */
-			if (client->fd >= 0 && FD_ISSET(client->fd, &er)) {
-				char c;
-
-				r = recv(client->fd, &c, 1, MSG_OOB);
-				if (r < 1)
-					SHUT(client->fd);
-			}
-
-			/* Check read. */
-			if (client->fd >= 0 && FD_ISSET(client->fd, &rd)) {
-				r = read(client->fd, client->in + client->in_len, BUF_SIZE);
-				if (r < 1)
-				{
-					SHUT(client->fd);
-				}
-				else
-				{
-					client->in_len += r;
-					handle_input(client, &client_list);
-				}
-			}
-
-			/* Check write. */
-			if (client->fd >= 0 && FD_ISSET(client->fd, &wr)) {
-				r = write(client->fd, client->out, client->out_len);
-				if (r < 1)
-					SHUT(client->fd);
-
-				client->out_len = 0;
-				client->out[0] = '\0';
-			}
-		}
-
-		/* Delete all clients which no longer have an open socket. */
-		list_for_each_safe(pos, q, &client_list)
-		{
-			client = list_entry(pos, struct client, list);
-			if (client->fd == -1)
-			{
-				dbg("deleting client %p\n", client);
-				list_del(pos);
-				free(client);
-			}
-		}
-	}
+	dbg("dispatch\n");
+	event_base_dispatch(base);
 
 	exit(EXIT_SUCCESS);
 }
+

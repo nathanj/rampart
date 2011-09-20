@@ -5,7 +5,9 @@
 
 #define dbg(fmt, args...) printf("%25s:%4d: " fmt, __func__, __LINE__, ##args);
 
-#define BUF_SIZE 4096
+#define BUF_SIZE 1024
+
+struct event;
 
 struct client
 {
@@ -22,6 +24,9 @@ struct client
 	int ready_for_next_state;
 
 	struct list_head list;
+
+	struct event *ev_read;
+	struct event *ev_write;
 };
 
 int handle_join_message(const char *in, struct client *client,
