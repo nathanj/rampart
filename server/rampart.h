@@ -4,8 +4,9 @@
 #include "list.h"
 
 #define dbg(fmt, args...) printf("%25s:%4d: " fmt, __func__, __LINE__, ##args);
+#define FREE(x) do { free(x); x = NULL; } while (0)
 
-#define BUF_SIZE 1024
+#define BUF_SIZE 512
 
 struct event;
 
@@ -16,6 +17,12 @@ struct client
 	int in_len;
 	char out[BUF_SIZE];
 	int out_len;
+
+	char *key;
+	char *origin;
+	char *host;
+	int version;
+	char *partial_line;
 
 	int finished_headers;
 	char game[32];

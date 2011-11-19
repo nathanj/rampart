@@ -77,12 +77,11 @@ static int starts_with(const char *haystack, const char *needle)
 static int handle_handshake(struct client *client)
 {
 	/* Send the response. */
-	char *p = NULL, *start = NULL;
-	char *key = NULL;
-	char *origin = NULL;
-	char *host = NULL;
+	char *p = NULL;
+	char *start = NULL;
+	char *line = NULL;
+	int line_alloced = 0;
 	char response[32] = { 0 };
-	int version = 0;
 
 	start = client->in;
 	while (*start) {
@@ -93,35 +92,56 @@ static int handle_handshake(struct client *client)
 			*p++ = '\0';	/* remove \n */
 
 			/* We are at the blank line, the rest is data. */
-			if (start == p - 2)
+			if (start == p - 2) {
+				client->finished_headers = 1;
 				break;
+			}
 		} else {
+			client->partial_line = strdup(start);
+			client->in_len = 0;
 			break;
 		}
 
+		if (client->partial_line) {
+			asprintf(&line, "%s%s", client->partial_line, start);
+			line_alloced = 1;
+			FREE(client->partial_line);
+		} else {
+			line = start;
+			line_alloced = 0;
+		}
+
+		start = line;
+
 		if (starts_with(start, "Sec-WebSocket-Key: ")) {
 			start += strlen("Sec-WebSocket-Key: ");
-			key = strdup(start);
+			client->key = strdup(start);
 		} else if (starts_with(start, "Sec-WebSocket-Origin: ")) {
 			start += strlen("Sec-WebSocket-Origin: ");
-			origin = strdup(start);
+			client->origin = strdup(start);
 		} else if (starts_with(start, "Sec-WebSocket-Version: ")) {
 			start += strlen("Sec-WebSocket-Version: ");
-			version = atoi(start);
+			client->version = atoi(start);
 		} else if (starts_with(start, "Host: ")) {
 			start += strlen("Host: ");
-			host = strdup(start);
+			client->host = strdup(start);
 		}
+
+		if (line_alloced)
+			FREE(line);
 
 		start = p;
 	}
 
-	assert(version >= 8);
-	assert(key);
-	assert(origin);
-	assert(host);
+	if (!client->finished_headers)
+		return 1;
 
-	compute_response(key, response);
+	assert(client->version >= 8);
+	assert(client->key);
+	assert(client->origin);
+	assert(client->host);
+
+	compute_response(client->key, response);
 
 	client->out_len =
 		snprintf(client->out, BUF_SIZE,
@@ -135,15 +155,20 @@ static int handle_handshake(struct client *client)
 			 "Access-Control-Allow-Credentials: true\r\n"
 			 "Access-Control-Allow-Headers: content-type\r\n"
 			 "\r\n",
-			 origin, host, response);
+			 client->origin, client->host, response);
 
 	client->out[client->out_len] = '\0';
 
-	dbg("adding event write\n");
 	event_add(client->ev_write, NULL);
 
-	client->finished_headers = 1;
 	client->in_len = 0;
+
+	if (client->finished_headers) {
+		FREE(client->key);
+		FREE(client->origin);
+		FREE(client->host);
+		FREE(client->partial_line);
+	}
 
 	return 0;
 }
@@ -192,11 +217,10 @@ static int handle_websocket_frame(struct client *client,
  * handshake or a game message. */
 static int handle_input(struct client *client, struct list_head *client_list)
 {
-	if (client->finished_headers) {
+	if (client->finished_headers)
 		handle_websocket_frame(client, client_list);
-	} else {
+	else
 		handle_handshake(client);
-	}
 
 	return 0;
 }
@@ -241,15 +265,14 @@ static void write_client(int fd, short event, void *arg)
 
 static void read_client(int fd, short event, void *arg)
 {
-	char buf[255];
 	int len;
 	struct client *client = (struct client *) arg;
 
-	dbg("read_client called with fd: %d, event: %d, arg: %p\n",
-	    fd, event, arg);
+	dbg("read_client called with fd: %d, event: %d, arg: %p, len=%d\n",
+	    fd, event, arg, client->in_len);
 
 	len = read(client->fd, client->in + client->in_len,
-		   sizeof(buf) - 1);
+		   BUF_SIZE - client->in_len - 1);
 
 	if (len == -1) {
 		perror("read");
