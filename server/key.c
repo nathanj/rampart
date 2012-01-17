@@ -9,7 +9,7 @@
 #include "b64.h"
 
 #define GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-#define FULL_KEY_SIZE 32 + sizeof(GUID)
+#define FULL_KEY_SIZE (32 + sizeof(GUID))
 
 /* Computes the server's response based on the three keys. The response
  * is stored in response which should be at least 28 bytes in length. */
@@ -21,7 +21,7 @@ void compute_response(const char *key, char *response)
 	SHA1Context sha1_context;
 
 	len = snprintf(full_key, FULL_KEY_SIZE, "%s%s", key, GUID);
-	assert(len < FULL_KEY_SIZE);
+	assert(len < (int) FULL_KEY_SIZE);
 
 	SHA1Reset(&sha1_context);
 	SHA1Input(&sha1_context, (unsigned char *) full_key, len);

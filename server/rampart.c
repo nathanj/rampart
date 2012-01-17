@@ -71,7 +71,7 @@ static int other_player_is_ready(struct client *client,
 
 /* Client is ready for the next state. Record it. If both players are
  * ready, send a go message to all clients of the game. */
-int handle_ready_message(const char *in, struct client *client,
+int handle_ready_message(struct client *client,
 			 struct list_head *client_list, int game_over)
 {
 	struct client *other = NULL;
@@ -129,9 +129,9 @@ int handle_message(const char *in, struct client *client,
 	if (strncmp(in, "join ", strlen("join ")) == 0)
 		handle_join_message(in, client, client_list);
 	else if (strncmp(in, "ready", strlen("ready")) == 0)
-		handle_ready_message(in, client, client_list, 0);
+		handle_ready_message(client, client_list, 0);
 	else if (strncmp(in, "gameover", strlen("gameover")) == 0)
-		handle_ready_message(in, client, client_list, 1);
+		handle_ready_message(client, client_list, 1);
 	else
 		handle_normal_message(in, client, client_list);
 

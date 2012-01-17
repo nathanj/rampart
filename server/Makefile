@@ -1,6 +1,7 @@
 
 CC=gcc
-CFLAGS=--std=gnu99 -D_GNU_SOURCE -Wall -g -O0 -I. -I.. `pkg-config --cflags libevent`
+CFLAGS=--std=gnu99 -D_GNU_SOURCE -Wall -Wextra -Werror -g -O0
+CFLAGS+=-I. -I.. `pkg-config --cflags libevent`
 LDFLAGS=`pkg-config --libs libevent`
 
 SRCS=$(wildcard *.c)

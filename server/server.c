@@ -27,7 +27,8 @@ static int listen_socket(int listen_port)
 	int s;
 	int yes;
 
-	if ((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+	s = socket(AF_INET, SOCK_STREAM, 0);
+	if (s == -1) {
 		perror("socket");
 		return -1;
 	}
@@ -53,14 +54,16 @@ static int listen_socket(int listen_port)
 
 static int accept_client(int socket)
 {
-	unsigned int l = 0;
-	struct sockaddr_in client_address = { 0 };
+	unsigned int size = 0;
+	struct sockaddr_in client_address;
 	int r = 0;
 
-	memset(&client_address, 0, l = sizeof(client_address));
-	r = accept(socket, (struct sockaddr *) &client_address, &l);
+	size = sizeof(client_address);
+	memset(&client_address, 0, size);
+	r = accept(socket, (struct sockaddr *) &client_address, &size);
 	if (r == -1) {
 		perror("accept()");
+		return r;
 	}
 
 	dbg("connect from %d %s\n", r,
@@ -82,6 +85,7 @@ static int handle_handshake(struct client *client)
 	char *line = NULL;
 	int line_alloced = 0;
 	char response[32] = { 0 };
+	int rc;
 
 	start = client->in;
 	while (*start) {
@@ -103,7 +107,9 @@ static int handle_handshake(struct client *client)
 		}
 
 		if (client->partial_line) {
-			asprintf(&line, "%s%s", client->partial_line, start);
+			rc = asprintf(&line, "%s%s",
+				      client->partial_line, start);
+			assert(rc != -1);
 			line_alloced = 1;
 			FREE(client->partial_line);
 		} else {
@@ -165,9 +171,10 @@ static int handle_websocket_frame(struct client *client,
 {
 	char *in = client->in;
 	char *buffer;
-	int i;
+	unsigned int i;
 	unsigned char mask[4];
 	unsigned int packet_length = 0;
+	int rc;
 
 	while (client->in_len > 0) {
 		/* Expect a finished text frame. */
@@ -184,7 +191,8 @@ static int handle_websocket_frame(struct client *client,
 		for (i = 0; i < packet_length; i++)
 			in[6 + i] ^= mask[i % 4];
 
-		asprintf(&buffer, "%.*s", packet_length, in + 6);
+		rc = asprintf(&buffer, "%.*s", packet_length, in + 6);
+		assert(rc != -1);
 
 		dbg("fd=%d is relaying: %s\n", client->fd, buffer);
 
@@ -309,6 +317,9 @@ int main(int argc, char **argv)
 {
 	int socket = -1;
 	struct event socket_ev;
+
+	(void) argc;
+	(void) argv;
 
 	INIT_LIST_HEAD(&client_list);
 
