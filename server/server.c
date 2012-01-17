@@ -116,15 +116,9 @@ static int handle_handshake(struct client *client)
 		if (starts_with(start, "Sec-WebSocket-Key: ")) {
 			start += strlen("Sec-WebSocket-Key: ");
 			client->key = strdup(start);
-		} else if (starts_with(start, "Sec-WebSocket-Origin: ")) {
-			start += strlen("Sec-WebSocket-Origin: ");
-			client->origin = strdup(start);
 		} else if (starts_with(start, "Sec-WebSocket-Version: ")) {
 			start += strlen("Sec-WebSocket-Version: ");
 			client->version = atoi(start);
-		} else if (starts_with(start, "Host: ")) {
-			start += strlen("Host: ");
-			client->host = strdup(start);
 		}
 
 		if (line_alloced)
@@ -138,8 +132,6 @@ static int handle_handshake(struct client *client)
 
 	assert(client->version >= 8);
 	assert(client->key);
-	assert(client->origin);
-	assert(client->host);
 
 	compute_response(client->key, response);
 
@@ -148,14 +140,9 @@ static int handle_handshake(struct client *client)
 			 "HTTP/1.1 101 Switching Protocols\r\n"
 			 "Upgrade: WebSocket\r\n"
 			 "Connection: Upgrade\r\n"
-			 "Sec-WebSocket-Origin: %s\r\n"
-			 "Sec-WebSocket-Location: ws://%s/\r\n"
 			 "Sec-WebSocket-Accept: %s\r\n"
-			 "Access-Control-Allow-Origin: null\r\n"
-			 "Access-Control-Allow-Credentials: true\r\n"
-			 "Access-Control-Allow-Headers: content-type\r\n"
 			 "\r\n",
-			 client->origin, client->host, response);
+			 response);
 
 	client->out[client->out_len] = '\0';
 
@@ -165,8 +152,6 @@ static int handle_handshake(struct client *client)
 
 	if (client->finished_headers) {
 		FREE(client->key);
-		FREE(client->origin);
-		FREE(client->host);
 		FREE(client->partial_line);
 	}
 

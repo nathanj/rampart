@@ -19,8 +19,6 @@ struct client
 	int out_len;
 
 	char *key;
-	char *origin;
-	char *host;
 	int version;
 	char *partial_line;
 
