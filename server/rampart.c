@@ -34,8 +34,8 @@ static void tell_client(struct client *client, const char *format, ...)
 }
 
 /* Client has joined a game. Give him a player number. */
-int handle_join_message(const char *in, struct client *client,
-			struct list_head *client_list)
+static int handle_join_message(const char *in, struct client *client,
+			       struct list_head *client_list)
 {
 	struct client *other = NULL;
 
@@ -71,8 +71,8 @@ static int other_player_is_ready(struct client *client,
 
 /* Client is ready for the next state. Record it. If both players are
  * ready, send a go message to all clients of the game. */
-int handle_ready_message(struct client *client,
-			 struct list_head *client_list, int game_over)
+static int handle_ready_message(struct client *client,
+				struct list_head *client_list, int game_over)
 {
 	struct client *other = NULL;
 	int ready = 0;
@@ -104,8 +104,8 @@ int handle_ready_message(struct client *client,
 }
 
 /* Standard game message. Relay to other clients of the same game. */
-int handle_normal_message(const char *in, struct client *client,
-			  struct list_head *client_list)
+static int handle_normal_message(const char *in, struct client *client,
+				 struct list_head *client_list)
 {
 	struct client *other = NULL;
 
@@ -127,14 +127,12 @@ int handle_message(const char *in, struct client *client,
 {
 	dbg("msg: %s\n", in);
 	if (strncmp(in, "join ", strlen("join ")) == 0)
-		handle_join_message(in, client, client_list);
+		return handle_join_message(in, client, client_list);
 	else if (strncmp(in, "ready", strlen("ready")) == 0)
-		handle_ready_message(client, client_list, 0);
+		return handle_ready_message(client, client_list, 0);
 	else if (strncmp(in, "gameover", strlen("gameover")) == 0)
-		handle_ready_message(client, client_list, 1);
+		return handle_ready_message(client, client_list, 1);
 	else
-		handle_normal_message(in, client, client_list);
-
-	return 0;
+		return handle_normal_message(in, client, client_list);
 }
 
