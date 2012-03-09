@@ -9,7 +9,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#include <assert.h>
 
 #include <event.h>
 
@@ -109,7 +108,11 @@ static int handle_handshake(struct client *client)
 		if (client->partial_line) {
 			rc = asprintf(&line, "%s%s",
 				      client->partial_line, start);
-			assert(rc != -1);
+			if (rc == -1) {
+				dbg("asprintf: %s\n", strerror(errno));
+				return -1;
+			}
+
 			line_alloced = 1;
 			FREE(client->partial_line);
 		} else {
@@ -136,10 +139,20 @@ static int handle_handshake(struct client *client)
 	if (!client->finished_headers)
 		return 1;
 
-	assert(client->version >= 8);
-	assert(client->key);
+	if (client->version < 8) {
+		dbg("unsupported websocket version: %d\n", client->version);
+		return -1;
+	}
+	if (!client->key) {
+		dbg("client did not give a key\n");
+		return -1;
+	}
 
-	compute_response(client->key, response);
+	rc = compute_response(client->key, response);
+	if (rc != 0) {
+		dbg("failed to compute response: %d\n", rc);
+		return -1;
+	}
 
 	client->out_len =
 		snprintf(client->out, BUF_SIZE,
@@ -178,7 +191,10 @@ static int handle_websocket_frame(struct client *client,
 
 	while (client->in_len > 0) {
 		/* Expect a finished text frame. */
-		assert(in[0] == '\x81');
+		if (in[0] != '\x81') {
+			dbg("unexpected websocket frame: 0x%02x\n", in[0]);
+			return -1;
+		}
 
 		packet_length = ((unsigned char) in[1]) & 0x7f;
 
@@ -192,7 +208,10 @@ static int handle_websocket_frame(struct client *client,
 			in[6 + i] ^= mask[i % 4];
 
 		rc = asprintf(&buffer, "%.*s", packet_length, in + 6);
-		assert(rc != -1);
+		if (rc == -1) {
+			perror("asprintf");
+			return -1;
+		}
 
 		dbg("fd=%d is relaying: %s\n", client->fd, buffer);
 
@@ -211,11 +230,9 @@ static int handle_websocket_frame(struct client *client,
 static int handle_input(struct client *client, struct list_head *client_list)
 {
 	if (client->finished_headers)
-		handle_websocket_frame(client, client_list);
+		return handle_websocket_frame(client, client_list);
 	else
-		handle_handshake(client);
-
-	return 0;
+		return handle_handshake(client);
 }
 
 static void delete_client(struct client *client)
