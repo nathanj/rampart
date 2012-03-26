@@ -6,15 +6,9 @@
 
 #include "rampart.h"
 
-struct room {
-	char name[32];
-	int num_players;
-	struct list_head list;
-};
-
 LIST_HEAD(room_list);
 
-static void create_room(const char *name)
+static struct room *create_room(const char *name)
 {
 	struct room *room = NULL;
 
@@ -23,6 +17,8 @@ static void create_room(const char *name)
 	room->num_players = 1;
 
 	list_add_tail(&(room->list), &room_list);
+
+	return room;
 }
 
 static void delete_room(struct room *room)
@@ -30,7 +26,7 @@ static void delete_room(struct room *room)
 	list_del(&room->list);
 }
 
-int increment_room(const char *game)
+static struct room *increment_room(const char *game)
 {
 	struct room *room = NULL;
 
@@ -38,38 +34,26 @@ int increment_room(const char *game)
 	list_for_each_entry(room, &room_list, list) {
 		if (strcasecmp(room->name, game) == 0) {
 			room->num_players++;
-			return 0;
+			return room;
 		}
 	}
 
-	create_room(game);
-
-	return 0;
+	return create_room(game);
 }
 
-int decrement_room(const char *game)
+static void decrement_room(struct room *room)
 {
-	struct room *room = NULL;
+	room->num_players--;
 
-	list_for_each_entry(room, &room_list, list) {
-		if (strcasecmp(room->name, game) == 0) {
-			room->num_players--;
-
-			if (room->num_players == 0)
-				delete_room(room);
-
-			return 0;
-		}
-	}
-
-	return -1;
+	if (room->num_players == 0)
+		delete_room(room);
 }
 
 /* Is other in the same game as client? */
 static int other_client_in_game(struct client *client, struct client *other)
 {
 	return (client->fd != other->fd
-		&& strcmp(client->game, other->game) == 0);
+		&& client->room == other->room);
 }
 
 /* Send a message to a client. */
@@ -100,7 +84,8 @@ static int handle_join_message(const char *in, struct client *client,
 {
 	struct client *other = NULL;
 
-	snprintf(client->game, 32, "%s", in + 5);
+	client->room = increment_room(in + 5);
+
 	client->player = 1;
 
 	/* Set the player number to max(clients in game) + 1. */
@@ -111,10 +96,8 @@ static int handle_join_message(const char *in, struct client *client,
 		}
 	}
 
-	increment_room(client->game);
-
-	dbg("client %p has joined game '%s' as player %d\n",
-	    client, client->game, client->player);
+	dbg("client %p has joined room '%s' as player %d\n",
+	    client, client->room->name, client->player);
 
 	tell_client(client, "player %d", client->player);
 
@@ -126,7 +109,7 @@ static int other_player_is_ready(struct client *client,
 				 struct client *other)
 {
 	return (client->fd != other->fd
-		&& strcmp(client->game, other->game) == 0
+		&& client->room == other->room
 		&& client->player != other->player
 		&& other->ready_for_next_state
 		&& (other->player == 1 || other->player == 2));
@@ -157,7 +140,7 @@ static int handle_ready_message(struct client *client,
 	 * then start a new game. */
 	list_for_each_entry(other, client_list, list) {
 		dbg("client=%p other=%p\n", client, other);
-		if (strcmp(client->game, other->game) == 0) {
+		if (client->room == other->room) {
 			other->ready_for_next_state = 0;
 			tell_client(other, game_over ? "newgame" : "go");
 		}
@@ -191,9 +174,7 @@ static int handle_list_message(struct client *client)
 	char in_room;
 
 	list_for_each_entry(room, &room_list, list) {
-		in_room = (strcasecmp(client->game, room->name) == 0)
-			? '*'
-			: '-';
+		in_room = client->room == room ? '*' : '-';
 
 		tell_client(client, "room %c %d %s",
 			    in_room,
@@ -219,5 +200,11 @@ int handle_message(const char *in, struct client *client,
 		return handle_list_message(client);
 	else
 		return handle_normal_message(in, client, client_list);
+}
+
+/* Called when a client exits the game. */
+void end_client(struct client *client)
+{
+	decrement_room(client->room);
 }
 

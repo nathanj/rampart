@@ -10,6 +10,12 @@
 
 struct event;
 
+struct room {
+	char name[32];
+	int num_players;
+	struct list_head list;
+};
+
 struct client
 {
 	int fd;
@@ -23,7 +29,7 @@ struct client
 	char *partial_line;
 
 	int finished_headers;
-	char game[32];
+	struct room *room;
 	int player;
 
 	int ready_for_next_state;
@@ -36,8 +42,6 @@ struct client
 
 int handle_message(const char *in, struct client *client,
 		struct list_head *client_list);
-
-int increment_room(const char *game);
-int decrement_room(const char *game);
+void end_client(struct client *client);
 
 #endif /* __RAMPART_H__ */
