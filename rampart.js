@@ -589,13 +589,26 @@ function newGame()
 	cannons = new Array();
 }
 
+function getParams() {
+	var res = {};
+	var a = window.location.search.replace(/\?/, '').split(/&/);
+	for (var i in a) {
+		var e = a[i].split('=');
+		res[e[0]] = e[1];
+	}
+	return res;
+}
+
 function onOpen(evt) {
+	var params = getParams();
+
 	writeToScreen("CONNECTED");
 
-	if (window.location.search.length > 0)
-		doSend('join ' + window.location.search);
+	if (params['game'] == undefined)
+		doSend('join default');
 	else
-		doSend('join game');
+		doSend('join ' + params['game']);
+	doSend('list');
 	doSend('ready');
 }
 function onClose(evt) {
@@ -625,10 +638,10 @@ function onMessage(evt) {
 	}
 	else if ( (m = evt.data.match(/player (\d+)/)) )
 	{
-		writeToScreen('<span style="color: blue; "> YOU ARE PLAYER: ' + evt.data+'</span> ');
+		writeToScreen('<span style="color: blue; "> You are ' + evt.data+ ' in this room</span> ');
 		player = parseInt(m[1]);
 		if (player > 2)
-			writeToScreen('<span style="color: red; "> Players over 2 cannot do anything, sorry.</span> ');
+			writeToScreen('<span style="color: red; "> Players over 2 cannot do anything, sorry. Try joining a different room.</span> ');
 	}
 	else if ( (m = evt.data.match(/go/)) )
 	{
@@ -639,9 +652,16 @@ function onMessage(evt) {
 		newGame();
 		websocket.send('ready');
 	}
+	else if ( (m = evt.data.match(/room (\d+) (.*)/)) )
+	{
+		$("#rooms")
+			.append($('<option></option>')
+				.attr("value", m[2])
+				.text(m[2] + " (" + m[1] + ")"));
+	}
 	else
 	{
-		writeToScreen('<span style="color: red; "> UNKNOWN MESSAGE: ' + evt.data+'</span> ');
+		writeToScreen('<span style="color: red; "> UNKNOWN MESSAGE: ' + evt.data + '</span> ');
 	}
 }
 function onError(evt) {

@@ -240,6 +240,7 @@ static void delete_client(struct client *client)
 	dbg("deleting client %p %p\n", client, &client->list);
 
 	list_del(&client->list);
+	decrement_room(client->game);
 
 	event_free(client->ev_read);
 	event_free(client->ev_write);

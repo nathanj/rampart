@@ -37,4 +37,7 @@ struct client
 int handle_message(const char *in, struct client *client,
 		struct list_head *client_list);
 
+int increment_room(const char *game);
+int decrement_room(const char *game);
+
 #endif /* __RAMPART_H__ */

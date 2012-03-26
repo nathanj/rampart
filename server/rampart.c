@@ -6,8 +6,67 @@
 
 #include "rampart.h"
 
+struct room {
+	char name[32];
+	int players;
+	struct list_head list;
+};
+
+LIST_HEAD(room_list);
+
+static void create_room(const char *name)
+{
+	struct room *room = NULL;
+
+	room = malloc(sizeof(*room));
+	snprintf(room->name, sizeof(room->name), "%s", name);
+	room->players = 1;
+
+	list_add_tail(&(room->list), &room_list);
+}
+
+static void delete_room(struct room *room)
+{
+	list_del(&room->list);
+}
+
+int increment_room(const char *game)
+{
+	struct room *room = NULL;
+
+	/* Increment a room that already exists. */
+	list_for_each_entry(room, &room_list, list) {
+		if (strcasecmp(room->name, game) == 0) {
+			room->players++;
+			return 0;
+		}
+	}
+
+	create_room(game);
+
+	return 0;
+}
+
+int decrement_room(const char *game)
+{
+	struct room *room = NULL;
+
+	list_for_each_entry(room, &room_list, list) {
+		if (strcasecmp(room->name, game) == 0) {
+			room->players--;
+
+			if (room->players == 0)
+				delete_room(room);
+
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
 /* Is other in the same game as client? */
-int other_client_in_game(struct client *client, struct client *other)
+static int other_client_in_game(struct client *client, struct client *other)
 {
 	return (client->fd != other->fd
 		&& strcmp(client->game, other->game) == 0);
@@ -51,6 +110,8 @@ static int handle_join_message(const char *in, struct client *client,
 			client->player = other->player + 1;
 		}
 	}
+
+	increment_room(client->game);
 
 	dbg("client %p has joined game '%s' as player %d\n",
 	    client, client->game, client->player);
@@ -123,6 +184,19 @@ static int handle_normal_message(const char *in, struct client *client,
 	return 0;
 }
 
+/* List rooms on the server. */
+static int handle_list_message(struct client *client)
+{
+	struct room *room = NULL;
+
+	list_for_each_entry(room, &room_list, list)
+		tell_client(client, "room %d %s",
+			    room->players,
+			    room->name);
+
+	return 0;
+}
+
 /* Handle game messages. */
 int handle_message(const char *in, struct client *client,
 		   struct list_head *client_list)
@@ -134,6 +208,8 @@ int handle_message(const char *in, struct client *client,
 		return handle_ready_message(client, client_list, 0);
 	else if (strncmp(in, "gameover", strlen("gameover")) == 0)
 		return handle_ready_message(client, client_list, 1);
+	else if (strncmp(in, "list", strlen("list")) == 0)
+		return handle_list_message(client);
 	else
 		return handle_normal_message(in, client, client_list);
 }
