@@ -8,7 +8,7 @@
 
 struct room {
 	char name[32];
-	int players;
+	int num_players;
 	struct list_head list;
 };
 
@@ -20,7 +20,7 @@ static void create_room(const char *name)
 
 	room = malloc(sizeof(*room));
 	snprintf(room->name, sizeof(room->name), "%s", name);
-	room->players = 1;
+	room->num_players = 1;
 
 	list_add_tail(&(room->list), &room_list);
 }
@@ -37,7 +37,7 @@ int increment_room(const char *game)
 	/* Increment a room that already exists. */
 	list_for_each_entry(room, &room_list, list) {
 		if (strcasecmp(room->name, game) == 0) {
-			room->players++;
+			room->num_players++;
 			return 0;
 		}
 	}
@@ -53,9 +53,9 @@ int decrement_room(const char *game)
 
 	list_for_each_entry(room, &room_list, list) {
 		if (strcasecmp(room->name, game) == 0) {
-			room->players--;
+			room->num_players--;
 
-			if (room->players == 0)
+			if (room->num_players == 0)
 				delete_room(room);
 
 			return 0;
@@ -197,7 +197,7 @@ static int handle_list_message(struct client *client)
 
 		tell_client(client, "room %c %d %s",
 			    in_room,
-			    room->players,
+			    room->num_players,
 			    room->name);
 	}
 
