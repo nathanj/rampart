@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 #include <event.h>
 
@@ -14,7 +15,7 @@ static struct room *create_room(const char *name)
 
 	room = malloc(sizeof(*room));
 	snprintf(room->name, sizeof(room->name), "%s", name);
-	room->num_players = 1;
+	room->num_players = 0;
 
 	list_add_tail(&(room->list), &room_list);
 
@@ -24,21 +25,23 @@ static struct room *create_room(const char *name)
 static void delete_room(struct room *room)
 {
 	list_del(&room->list);
+	free(room);
 }
 
-static struct room *increment_room(const char *game)
+static struct room *find_room(const char *name)
 {
 	struct room *room = NULL;
 
-	/* Increment a room that already exists. */
-	list_for_each_entry(room, &room_list, list) {
-		if (strcasecmp(room->name, game) == 0) {
-			room->num_players++;
+	list_for_each_entry(room, &room_list, list)
+		if (strcasecmp(room->name, name) == 0)
 			return room;
-		}
-	}
 
-	return create_room(game);
+	return create_room(name);
+}
+
+static void increment_room(struct room *room)
+{
+	room->num_players++;
 }
 
 static void decrement_room(struct room *room)
@@ -83,8 +86,10 @@ static int handle_join_message(const char *in, struct client *client,
 			       struct list_head *client_list)
 {
 	struct client *other = NULL;
+	const char *room_name = in + strlen("join ");
 
-	client->room = increment_room(in + 5);
+	client->room = find_room(room_name);
+	increment_room(client->room);
 
 	client->player = 1;
 
