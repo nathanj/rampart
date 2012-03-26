@@ -564,6 +564,11 @@ function init(is_ai)
 	state_div = document.getElementById("state");
 	state_div.innerHTML = "whee";
 
+	$("#refresh").click(function() {
+		$("#rooms").find("option").remove();
+		doSend('list');
+	});
+
 	websocket = new WebSocket(wsUri);
 	websocket.onopen = function(evt) { onOpen(evt) };
 	websocket.onclose = function(evt) { onClose(evt) };
