@@ -15,6 +15,8 @@ int other_client_in_game(struct client *client, struct client *other)
 
 /* Send a message to a client. */
 static void tell_client(struct client *client, const char *format, ...)
+	__attribute__((format(printf,2,3)));
+static void tell_client(struct client *client, const char *format, ...)
 {
 	int len;
 	va_list args;
@@ -113,7 +115,7 @@ static int handle_normal_message(const char *in, struct client *client,
 
 	list_for_each_entry(other, client_list, list) {
 		if (other_client_in_game(client, other)) {
-			tell_client(other, in);
+			tell_client(other, "%s", in);
 			dbg("fd=%d len=%d\n", other->fd, other->out_len);
 		}
 	}
