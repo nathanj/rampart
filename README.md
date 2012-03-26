@@ -12,7 +12,7 @@ The game works in Chrome 16. Other browsers may work as well.
 Dependencies
 ------------
 
-   * libevent
+   * libevent2
 
 Running
 -------
