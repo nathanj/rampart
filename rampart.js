@@ -657,12 +657,17 @@ function onMessage(evt) {
 		newGame();
 		websocket.send('ready');
 	}
-	else if ( (m = evt.data.match(/room (\d+) (.*)/)) )
+	else if ( (m = evt.data.match(/room (.) (\d+) (.*)/)) )
 	{
+		var in_room = m[1] == '*';
+		var players = m[2];
+		var name = m[3];
+
 		$("#rooms")
 			.append($('<option></option>')
-				.attr("value", m[2])
-				.text(m[2] + " (" + m[1] + ")"));
+				.attr("value", name)
+				.text((in_room ? '* ' : '') +
+				      name + " (" + players + ")"));
 	}
 	else
 	{

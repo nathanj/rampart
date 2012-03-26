@@ -188,11 +188,18 @@ static int handle_normal_message(const char *in, struct client *client,
 static int handle_list_message(struct client *client)
 {
 	struct room *room = NULL;
+	char in_room;
 
-	list_for_each_entry(room, &room_list, list)
-		tell_client(client, "room %d %s",
+	list_for_each_entry(room, &room_list, list) {
+		in_room = (strcasecmp(client->game, room->name) == 0)
+			? '*'
+			: '-';
+
+		tell_client(client, "room %c %d %s",
+			    in_room,
 			    room->players,
 			    room->name);
+	}
 
 	return 0;
 }
