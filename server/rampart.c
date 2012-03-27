@@ -82,13 +82,12 @@ static void tell_client(struct client *client, const char *format, ...)
 }
 
 /* Client has joined a game. Give him a player number. */
-static int handle_join_message(const char *in, struct client *client,
+static int handle_join_message(const char *room, struct client *client,
 			       struct list_head *client_list)
 {
 	struct client *other = NULL;
-	const char *room_name = in + strlen("join ");
 
-	client->room = find_room(room_name);
+	client->room = find_room(room);
 	increment_room(client->room);
 
 	client->player = 1;
@@ -196,7 +195,8 @@ int handle_message(const char *in, struct client *client,
 {
 	dbg("msg: %s\n", in);
 	if (strncmp(in, "join ", strlen("join ")) == 0)
-		return handle_join_message(in, client, client_list);
+		return handle_join_message(in + strlen("join "), client,
+					   client_list);
 	else if (strncmp(in, "ready", strlen("ready")) == 0)
 		return handle_ready_message(client, client_list, 0);
 	else if (strncmp(in, "gameover", strlen("gameover")) == 0)
