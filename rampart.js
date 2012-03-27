@@ -469,6 +469,8 @@ function onMouseMove(e)
 {
 	mouse_x = e.x;
 	mouse_y = e.y;
+	mouse_x -= $(a).offset().left;
+	mouse_y -= $(a).offset().top;
 }
 
 function onClick(e)
@@ -1128,7 +1130,8 @@ function drawPiece()
 	for (var i = 0; i < 3; i++)
 		for (var j = 0; j < 3; j++)
 			if (current_piece[i][j] == 1)
-				drawPieceWall(parseInt((mouse_x-24)/16)+i, parseInt((mouse_y-24)/16)+j);
+				drawPieceWall(parseInt((mouse_x-16)/16)+i,
+					      parseInt((mouse_y-16)/16)+j);
 }
 
 function drawCannons()
@@ -1205,13 +1208,12 @@ function getCursorPosition(e) {
 	if (e.pageX != undefined && e.pageY != undefined) {
 		x = e.pageX;
 		y = e.pageY;
-	}
-	else {
+	} else {
 		x = e.clientX + document.body.scrollLeft + document.documentElement.scrollLeft;
 		y = e.clientY + document.body.scrollTop + document.documentElement.scrollTop;
 	}
-	x -= a.offsetLeft;
-	y -= a.offsetTop;
+	x -= $(a).offset().left;
+	y -= $(a).offset().top;
 	x = Math.min(x, 640);
 	y = Math.min(y, 480);
 	var cell = new Cell(x, y);

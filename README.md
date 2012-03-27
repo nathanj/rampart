@@ -7,7 +7,8 @@ Introduction
 This is implementation of the game Rampart in Javascript. Network play
 is supported by using WebSockets.
 
-The game works in Chrome 16. Other browsers may work as well.
+The game has only been tested to work with Chrome 17. Other browsers may
+work, but don't bet on it.
 
 Dependencies
 ------------
