@@ -156,6 +156,14 @@ var board =
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 ]
 
+/* Images */
+var img_castle = null;
+var img_brick = null;
+var img_cannon = null;
+var img_flame = null;
+var img_grass = null;
+var img_water = null;
+
 /* first byte */
 var WATER    = 0
 var GRASS    = 1
@@ -548,6 +556,13 @@ function getNewBoard()
 	}
 }
 
+function load_image(src)
+{
+	var a = new Image();
+	a.src = src;
+	return a;
+}
+
 function init(is_ai)
 {
 	a = document.getElementById("a");
@@ -570,6 +585,13 @@ function init(is_ai)
 		$("#rooms").find("option").remove();
 		doSend('list');
 	});
+
+	img_castle = load_image("images/castle.png");
+	img_brick = load_image("images/brick.png");
+	img_cannon = load_image("images/cannon.png");
+	img_flame = load_image("images/flame.png");
+	img_grass = load_image("images/grass.png");
+	img_water = load_image("images/water.png");
 
 	websocket = new WebSocket(wsUri);
 	websocket.onopen = function(evt) { onOpen(evt) };
@@ -1059,13 +1081,21 @@ function draw() {
 						drawGrass(i, j);
 					break;
 				case FORTRESS:
+					if (getPropertyType(board[j][i]) == CLOSED)
+						drawProperty(i, j);
+					else
+						drawGrass(i, j);
 					drawCastle(i, j);
 					break;
 				case WALL:
 					drawWall(i, j);
 					break;
 				case FIRE:
-					drawBurn(i, j);
+					if (getPropertyType(board[j][i]) == CLOSED)
+						drawProperty(i, j);
+					else
+						drawGrass(i, j);
+					drawFire(i, j);
 					break;
 				default:
 					alert('wuttt');
@@ -1221,36 +1251,31 @@ function getCursorPosition(e) {
 }
 
 function drawCannon(x, y) {
-	c.beginPath();
-	c.arc(x*16+8, y*16+8, 8, 0, Math.PI*2, false);
-	c.closePath();
-	c.strokeStyle = "#333";
-	c.fillStyle = "#999";
-	c.stroke();
-	c.fill();
+	c.drawImage(img_cannon, x*16, y*16);
 }
 
 function drawCastle(x, y) {
-	c.fillStyle = "#dd3";
-	c.fillRect(x*16, y*16, 16, 16);
+	c.drawImage(img_castle, x*16, y*16);
 }
 
 function drawWater(x, y) {
-	c.fillStyle = "#aae";
-	c.fillRect(x*16, y*16, 16, 16);
+	c.drawImage(img_water, x*16, y*16);
 }
 
-function drawBurn(x, y) {
-	c.fillStyle = "#eaa";
-	c.fillRect(x*16, y*16, 16, 16);
+function drawFire(x, y) {
+	c.drawImage(img_flame, x*16, y*16);
 }
 
 function drawGrass(x, y) {
+	c.drawImage(img_grass, x*16, y*16);
+
 	if ((x + y) % 2 == 0)
+	{
 		c.fillStyle = "#3b3";
-	else
-		c.fillStyle = "#6b6";
-	c.fillRect(x*16, y*16, 16, 16);
+		c.globalAlpha = 0.7;
+		c.fillRect(x*16, y*16, 16, 16);
+		c.globalAlpha = 1.0;
+	}
 }
 
 function drawProperty(x, y) {
@@ -1269,11 +1294,7 @@ function drawPieceWall(x, y) {
 }
 
 function drawWall(x, y) {
-	if ((x + y) % 2 == 0)
-		c.fillStyle = "#442";
-	else
-		c.fillStyle = "#753";
-	c.fillRect(x*16, y*16, 16, 16);
+	c.drawImage(img_brick, x*16, y*16);
 }
 
 
