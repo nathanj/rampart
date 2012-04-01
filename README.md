@@ -4,8 +4,8 @@ Rampart
 Introduction
 ------------
 
-This is implementation of the game Rampart in Javascript. Network play
-is supported by using WebSockets.
+This is an implementation of the game Rampart in Javascript. Network
+play is supported by using WebSockets.
 
 The game has only been tested to work with Chrome 17. Other browsers may
 work, but don't bet on it.
