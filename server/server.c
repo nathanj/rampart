@@ -17,7 +17,6 @@
 #include "key.h"
 #include "rampart.h"
 
-static struct list_head client_list;
 static struct event_base *base;
 
 static int listen_socket(int listen_port)
@@ -179,8 +178,7 @@ static int handle_handshake(struct client *client)
 
 /* Handles a standard websocket frame (sort of). We can cheat a bit here
  * since we always expect a non-fragmented text frame. */
-static int handle_websocket_frame(struct client *client,
-				  struct list_head *client_list)
+static int handle_websocket_frame(struct client *client)
 {
 	char *in = client->in;
 	char *buffer;
@@ -215,7 +213,7 @@ static int handle_websocket_frame(struct client *client,
 
 		dbg("fd=%d is relaying: %s\n", client->fd, buffer);
 
-		handle_message(buffer, client, client_list);
+		handle_message(buffer, client);
 
 		client->in_len -= packet_length + 6;
 		in += packet_length + 6;
@@ -227,21 +225,19 @@ static int handle_websocket_frame(struct client *client,
 
 /* Handle input received from a client. Input can be either the initial
  * handshake or a game message. */
-static int handle_input(struct client *client, struct list_head *client_list)
+static int handle_input(struct client *client)
 {
 	if (client->finished_headers)
-		return handle_websocket_frame(client, client_list);
+		return handle_websocket_frame(client);
 	else
 		return handle_handshake(client);
 }
 
 static void delete_client(struct client *client)
 {
-	dbg("deleting client %p %p\n", client, &client->list);
+	dbg("deleting client %p\n", client);
 
 	end_client(client);
-
-	list_del(&client->list);
 
 	event_free(client->ev_read);
 	event_free(client->ev_write);
@@ -296,7 +292,7 @@ static void read_client(int fd, short event, void *arg)
 	}
 
 	client->in_len += len;
-	handle_input(client, &client_list);
+	handle_input(client);
 }
 
 static void read_socket(int fd, short event, void *arg)
@@ -319,7 +315,6 @@ static void read_socket(int fd, short event, void *arg)
 					     EV_WRITE, write_client, client);
 
 		dbg("adding client %p fd=%d\n", client, client->fd);
-		list_add_tail(&(client->list), &client_list);
 
 		event_add(client->ev_read, NULL);
 	}
@@ -339,8 +334,6 @@ int main(int argc, char **argv)
 
 	(void) argc;
 	(void) argv;
-
-	INIT_LIST_HEAD(&client_list);
 
 	signal(SIGINT, stop);
 	signal(SIGPIPE, SIG_IGN);

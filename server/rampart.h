@@ -14,6 +14,8 @@ struct room {
 	char name[32];
 	int num_players;
 	struct list_head list;
+
+	struct list_head clients;
 };
 
 struct client
@@ -40,8 +42,7 @@ struct client
 	struct event *ev_write;
 };
 
-int handle_message(const char *in, struct client *client,
-		struct list_head *client_list);
+int handle_message(const char *in, struct client *client);
 void end_client(struct client *client);
 
 #endif /* __RAMPART_H__ */
