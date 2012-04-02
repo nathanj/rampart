@@ -75,7 +75,6 @@ static void tell_client(struct client *client, const char *format, ...)
 	client->out[client->out_len++] = (unsigned char) len;
 	client->out_len += len;
 
-	dbg("adding event write\n");
 	event_add(client->ev_write, NULL);
 
 	va_end(args);
@@ -143,7 +142,6 @@ static int handle_ready_message(struct client *client,
 	/* If ready, send go to all clients of the game. If gameover,
 	 * then start a new game. */
 	list_for_each_entry(other, client_list, list) {
-		dbg("client=%p other=%p\n", client, other);
 		if (client->room == other->room) {
 			other->ready_for_next_state = 0;
 			tell_client(other, game_over ? "newgame" : "go");
@@ -159,14 +157,9 @@ static int handle_normal_message(const char *in, struct client *client,
 {
 	struct client *other = NULL;
 
-	dbg("sending %s to everyone\n", in);
-
-	list_for_each_entry(other, client_list, list) {
-		if (other_client_in_game(client, other)) {
+	list_for_each_entry(other, client_list, list)
+		if (other_client_in_game(client, other))
 			tell_client(other, "%s", in);
-			dbg("fd=%d len=%d\n", other->fd, other->out_len);
-		}
-	}
 
 	return 0;
 }

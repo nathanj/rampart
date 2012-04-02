@@ -257,8 +257,8 @@ static void write_client(int fd, short event, void *arg)
 	int len;
 	struct client *client = (struct client *) arg;
 
-	dbg("write_client called with fd: %d, event: %d, arg: %p\n",
-	    fd, event, arg);
+	(void) fd;
+	(void) event;
 
 	len = write(client->fd, client->out, client->out_len);
 
@@ -280,8 +280,8 @@ static void read_client(int fd, short event, void *arg)
 	int len;
 	struct client *client = (struct client *) arg;
 
-	dbg("read_client called with fd: %d, event: %d, arg: %p, len=%d\n",
-	    fd, event, arg, client->in_len);
+	(void) fd;
+	(void) event;
 
 	len = read(client->fd, client->in + client->in_len,
 		   BUF_SIZE - client->in_len - 1);
@@ -303,8 +303,8 @@ static void read_socket(int fd, short event, void *arg)
 {
 	int r;
 
-	dbg("read_socket called with fd: %d, event: %d, arg: %p\n", fd,
-	    event, arg);
+	(void) event;
+	(void) arg;
 
 	r = accept_client(fd);
 
