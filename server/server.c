@@ -331,14 +331,15 @@ int main(int argc, char **argv)
 {
 	int socket = -1;
 	struct event socket_ev;
-
-	(void) argc;
-	(void) argv;
+	int port = 9999;
 
 	signal(SIGINT, stop);
 	signal(SIGPIPE, SIG_IGN);
 
-	socket = listen_socket(9999);
+	if (argc > 1)
+		port = atoi(argv[1]);
+
+	socket = listen_socket(port);
 	if (socket == -1)
 		exit(EXIT_FAILURE);
 
