@@ -19,7 +19,8 @@ check: all tests
 	./tests/test_server
 
 clean:
-	rm -rf $(TARGET) $(OBJS) $(DEPS)
+	rm -rf server *.o *.d \
+		tests/test_key tests/test_server tests/*.o tests/*.d
 
 .PHONY: clean
 
