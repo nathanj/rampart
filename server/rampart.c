@@ -49,6 +49,9 @@ static void add_to_room(struct client *player, struct room *room)
 
 static void remove_from_room(struct client *player)
 {
+	if (!player->room)
+		return;
+
 	list_del(&player->list);
 
 	player->room->num_players--;
