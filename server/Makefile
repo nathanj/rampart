@@ -5,7 +5,7 @@ CFLAGS  += `pkg-config --cflags libevent`
 LDFLAGS := `pkg-config --libs libevent`
 SRCS    := $(wildcard *.c)
 OBJS    := $(SRCS:.c=.o)
-DEPS    := $(wildcard *.d)
+DEPS    := $(SRCS:.c=.d)
 
 all: server
 server: $(OBJS)
@@ -24,6 +24,4 @@ clean:
 
 .PHONY: clean
 
-ifneq ($(DEPS),)
-include $(DEPS)
-endif
+-include $(DEPS)
