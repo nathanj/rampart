@@ -13,7 +13,7 @@
 "GET / HTTP/1.1\r\n" \
 "Upgrade: websocket\r\n" \
 "Connection: Upgrade\r\n" \
-"Host: localhost:9999\r\n" \
+"Host: localhost:9998\r\n" \
 "Origin: http://localhost\r\n" \
 "Sec-WebSocket-Key: ukqKDunDeNbXRUqF+YhPCg==\r\n" \
 "Sec-WebSocket-Version: 13\r\n" \
@@ -37,7 +37,7 @@ int spawn_server()
 	}
 
 	if (pid == 0) {
-		execl("./server", "./server", NULL);
+		execl("./server", "./server", "9998", NULL);
 		perror("exec");
 		abort();
 	}
@@ -114,7 +114,7 @@ int connect_to_server()
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 
-	rc = getaddrinfo("127.0.0.1", "9999", &hints, &res);
+	rc = getaddrinfo("127.0.0.1", "9998", &hints, &res);
 	if (rc < 0) {
 		printf("getaddrinfo: %s\n", gai_strerror(rc));
 		return -1;
