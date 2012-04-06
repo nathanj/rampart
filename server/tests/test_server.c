@@ -1,13 +1,15 @@
 #include <assert.h>
+#include <ctype.h>
+#include <errno.h>
 #include <netdb.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <signal.h>
-#include <errno.h>
 
 #define HTTP_HEADER \
 "GET / HTTP/1.1\r\n" \
@@ -84,21 +86,50 @@ int write_frame(int sockfd, const char *str)
 int read_frame(int sockfd, char *buf, size_t len)
 {
 	int rc;
-	int i;
+	fd_set rfds;
+	struct timeval tv;
+	size_t frame_len = 9999;
 
-	rc = read(sockfd, buf, len);
+	FD_ZERO(&rfds);
+	FD_SET(sockfd, &rfds);
+
+	tv.tv_sec = 3;
+	tv.tv_usec = 0;
+
+	rc = select(sockfd + 1, &rfds, NULL, NULL, &tv);
+
+	if (rc == -1) {
+		perror("select");
+		return -1;
+	} else if (rc == 0) {
+		printf("%s: timeout\n", __func__);
+		return -1;
+	}
+
+	/* Read start of text frame. */
+	rc = read(sockfd, buf, 1);
 	if (rc == -1) {
 		perror("read");
 		return -1;
 	}
-
 	assert(buf[0] = '\x81');
 
-	for (i = 0; i < rc - 2; i++) {
-		buf[i] = buf[i+2];
+	/* Read length of frame. */
+	rc = read(sockfd, buf, 1);
+	if (rc == -1) {
+		perror("read");
+		return -1;
 	}
+	frame_len = buf[0];
+	assert(frame_len <= len);
 
-	buf[rc - 2] = 0;
+	/* Read frame. */
+	rc = read(sockfd, buf, frame_len);
+	if (rc == -1) {
+		perror("read");
+		return -1;
+	}
+	buf[rc] = 0;
 
 	return rc;
 }
@@ -183,35 +214,77 @@ void sigfun(int sig)
 	raise(sig);
 }
 
+int cmp(const char *a, const char *b, int line)
+{
+	if (strcmp(a, b) == 0)
+		return 0;
+
+	printf(__FILE__ ":%d assertion failed\n", line);
+	printf("a = %s\n", a);
+	printf("b = %s\n", b);
+
+	abort();
+}
+
+#define expect(sock, str) do { \
+	read_frame(sock, buf, sizeof(buf)); \
+	cmp(buf, str, __LINE__); \
+} while (0)
+
 int main()
 {
-	int sockfd = -1;
+	int p[3];
 	char buf[1024];
+	int i;
 
 	child = spawn_server();
 	atexit(cleanup);
 
 	signal(SIGINT, sigfun);
 	signal(SIGTERM, sigfun);
-	signal(SIGKILL, sigfun);
 	signal(SIGABRT, sigfun);
 	signal(SIGSEGV, sigfun);
 
-	sockfd = connect_websocket();
-	if (sockfd == -1) {
-		printf("could not connect websocket\n");
-		return -1;
+	for (i = 0; i < 3; i++) {
+		p[i] = connect_websocket();
+		if (p[i] == -1) {
+			printf("could not connect websocket\n");
+			return -1;
+		}
 	}
 
-	write_frame(sockfd, "join default");
-	read_frame(sockfd, buf, sizeof(buf));
-	assert(strcmp(buf, "player 1") == 0);
-	write_frame(sockfd, "list");
-	read_frame(sockfd, buf, sizeof(buf));
-	assert(strcmp(buf, "room * 1 default") == 0);
-	write_frame(sockfd, "ready");
+	/* Connect player 1 to room default. */
+	write_frame(p[0], "join default");
+	expect(p[0], "player 1");
+	write_frame(p[0], "list");
+	expect(p[0], "room * 1 default");
+	write_frame(p[0], "ready");
 
-	close(sockfd);
+	/* Connect player 2 to room default. */
+	write_frame(p[1], "join default");
+	expect(p[1], "player 2");
+	write_frame(p[1], "list");
+	expect(p[1], "room * 2 default");
+	write_frame(p[1], "ready");
+
+	/* Now that both players are ready, they should both receive
+	 * "go". */
+	expect(p[0], "go");
+	expect(p[1], "go");
+
+	/* Send a wall command and verify other player receives. */
+	write_frame(p[0], "wall 10,10");
+	expect(p[1], "wall 10,10");
+
+	/* Connect player 3 to room test. */
+	write_frame(p[2], "join test");
+	expect(p[2], "player 1");
+	write_frame(p[2], "list");
+	expect(p[2], "room - 2 default");
+	expect(p[2], "room * 1 test");
+
+	for (i = 0; i < 3; i++)
+		close(p[i]);
 
 	return 0;
 }
