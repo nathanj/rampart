@@ -15,6 +15,10 @@ tests: tests/test_key tests/test_server
 tests/test_key: tests/test_key.o $(filter-out server.o,$(OBJS))
 tests/test_server: tests/test_server.o
 
+install: rampart-server
+	install -D -m755 etc/init.d/rampart-server /etc/init.d/rampart-server
+	install -D -m755 rampart-server /usr/local/bin/rampart-server
+
 check: all tests
 	./tests/test_key
 	./tests/test_server
