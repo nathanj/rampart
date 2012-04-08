@@ -7,8 +7,9 @@ SRCS    := $(wildcard *.c)
 OBJS    := $(SRCS:.c=.o)
 DEPS    := $(SRCS:.c=.d)
 
-all: server
-server: $(OBJS)
+all: rampart-server
+rampart-server: $(OBJS)
+	$(LINK.o) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
 tests: tests/test_key tests/test_server
 tests/test_key: tests/test_key.o $(filter-out server.o,$(OBJS))
@@ -19,7 +20,7 @@ check: all tests
 	./tests/test_server
 
 clean:
-	rm -rf server *.o *.d \
+	rm -rf rampart-server *.o *.d \
 		tests/test_key tests/test_server tests/*.o tests/*.d
 
 .PHONY: clean

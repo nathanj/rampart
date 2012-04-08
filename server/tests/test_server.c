@@ -39,7 +39,7 @@ int spawn_server()
 	}
 
 	if (pid == 0) {
-		execl("./server", "./server", "9998", NULL);
+		execl("./rampart-server", "./rampart-server", "9998", NULL);
 		perror("exec");
 		abort();
 	}
