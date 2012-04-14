@@ -575,7 +575,7 @@ function init(is_ai)
 
 	setInterval(update, 50);
 	if (is_ai)
-		compInt = setInterval(doComputer, 500);
+		compInt = setInterval(doComputer, 500 * $("#difficulty").val());
 
 	output = document.getElementById("output");
 	state_div = document.getElementById("state");
@@ -723,12 +723,12 @@ function switchState() {
 		if (state == 2)
 		{
 			window.clearInterval(compInt);
-			compInt = setInterval(doComputer, 300);
+			compInt = setInterval(doComputer, 300 * $("#difficulty").val());
 		}
 		else
 		{
 			window.clearInterval(compInt);
-			compInt = setInterval(doComputer, 500);
+			compInt = setInterval(doComputer, 500 * $("#difficulty").val());
 		}
 	}
 
