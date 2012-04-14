@@ -20,7 +20,7 @@ Running
 
 Compile and run the server WebSocket program.
 
-    $ cd server && make && ./server
+    $ cd server && make && ./rampart-server
 
 Then load up index.html in your browser to play. Load up ai.html in a
 second window to play against the computer opponent.
