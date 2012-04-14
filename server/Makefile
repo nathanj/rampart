@@ -24,7 +24,7 @@ check: all tests
 	./tests/test_server
 
 clean:
-	rm -rf rampart-server *.o *.d \
+	rm -f rampart-server *.o *.d \
 		tests/test_key tests/test_server tests/*.o tests/*.d
 
 .PHONY: clean
