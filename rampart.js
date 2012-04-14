@@ -817,7 +817,8 @@ function update() {
 				cb.done = true;
 				var x = parseInt(cb.end_x/16);
 				var y = parseInt(cb.end_y/16);
-				if (getTileType(board[y][x]) != WATER)
+				if (getTileType(board[y][x]) != WATER
+				    && getTileType(board[y][x]) != FORTRESS)
 					board[y][x] = FIRE;
 
 				/* Note: property does not change here until the state changes.
