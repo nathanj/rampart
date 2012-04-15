@@ -7,6 +7,7 @@
 
 #include "rampart.h"
 
+int debug_on;
 LIST_HEAD(room_list);
 
 static struct room *create_room(const char *name)

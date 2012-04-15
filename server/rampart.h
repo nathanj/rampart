@@ -3,7 +3,13 @@
 
 #include "list.h"
 
-#define dbg(fmt, args...) printf("%25s:%4d: " fmt, __func__, __LINE__, ##args);
+extern int debug_on;
+
+#define dbg(fmt, args...) do {\
+	if (debug_on) \
+		printf("%25s:%4d: " fmt, __func__, __LINE__, ##args); \
+} while (0);
+
 #define FREE(x) do { free(x); x = NULL; } while (0)
 
 #define BUF_SIZE 512

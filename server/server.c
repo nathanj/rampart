@@ -332,12 +332,17 @@ int main(int argc, char **argv)
 	int socket = -1;
 	struct event socket_ev;
 	int port = 9999;
+	int i;
 
 	signal(SIGINT, stop);
 	signal(SIGPIPE, SIG_IGN);
 
-	if (argc > 1)
-		port = atoi(argv[1]);
+	for (i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "-d") == 0)
+			debug_on = 1;
+		else
+			port = atoi(argv[i]);
+	}
 
 	socket = listen_socket(port);
 	if (socket == -1)
