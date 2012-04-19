@@ -4,41 +4,53 @@
 #include <ctype.h>
 #include <arpa/inet.h>
 
-#include "sha1.h"
-#include "b64.h"
+#include <openssl/sha.h>
+#include <openssl/hmac.h>
+#include <openssl/bio.h>
+#include <openssl/buffer.h>
 
 #define GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 #define FULL_KEY_SIZE (32 + sizeof(GUID))
+
+static int base64(const unsigned char *input, int length, unsigned char *buf)
+{
+	BIO *bmem, *b64;
+	BUF_MEM *bptr;
+	int rc;
+
+	b64 = BIO_new(BIO_f_base64());
+	BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+	bmem = BIO_new(BIO_s_mem());
+	b64 = BIO_push(b64, bmem);
+	BIO_write(b64, input, length);
+	rc = BIO_flush(b64);
+	if (rc != 1)
+		return -1;
+	BIO_get_mem_ptr(b64, &bptr);
+
+	memcpy(buf, bptr->data, bptr->length);
+	buf[bptr->length] = 0;
+
+	BIO_free_all(b64);
+
+	return 0;
+}
 
 /* Computes the server's response based on the three keys. The response
  * is stored in response which should be at least 28 bytes in length. */
 int compute_response(const char *key, char *response)
 {
-	char full_key[FULL_KEY_SIZE];
+	unsigned char full_key[FULL_KEY_SIZE];
+	unsigned char sha1[20];
 	int len;
 	int rc;
-	SHA1Context sha1_context;
 
-	len = snprintf(full_key, FULL_KEY_SIZE, "%s%s", key, GUID);
+	len = snprintf((char *) full_key, FULL_KEY_SIZE, "%s%s", key, GUID);
 	if (len < 0 || len >= (int) FULL_KEY_SIZE)
 		return -1;
 
-	SHA1Reset(&sha1_context);
-	SHA1Input(&sha1_context, (unsigned char *) full_key, len);
-	rc = SHA1Result(&sha1_context);
-	if (rc != 1)
-		return -1;
+	SHA1(full_key, len, sha1);
+	rc = base64(sha1, 20, (unsigned char *) response);
 
-	for (int i = 0; i < 5; i++) {
-		sha1_context.Message_Digest[i] =
-			ntohl(sha1_context.Message_Digest[i]);
-	}
-
-
-	base64encode((unsigned char *) sha1_context.Message_Digest,
-		     (unsigned char *) response,
-		     20);
-
-	return  0;
+	return rc;
 }
-

@@ -1,8 +1,8 @@
 CC      := gcc
 CFLAGS  := --std=gnu99 -D_GNU_SOURCE -Wall -Wextra -Werror -g -O2 -MMD
 CFLAGS  += -I. -I..
-CFLAGS  += `pkg-config --cflags libevent`
-LDFLAGS := `pkg-config --libs libevent`
+CFLAGS  += `pkg-config --cflags libevent openssl`
+LDFLAGS := `pkg-config --libs libevent openssl`
 SRCS    := $(wildcard *.c)
 OBJS    := $(SRCS:.c=.o)
 DEPS    := $(SRCS:.c=.d)
