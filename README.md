@@ -13,6 +13,7 @@ work, but don't bet on it.
 Dependencies
 ------------
 
+   * openssl
    * libevent2
 
 Running
