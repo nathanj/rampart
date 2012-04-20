@@ -36,8 +36,11 @@ static int base64(const unsigned char *input, int length, unsigned char *buf)
 	return 0;
 }
 
-/* Computes the server's response based on the three keys. The response
- * is stored in response which should be at least 28 bytes in length. */
+/*
+ * Computes the server's response to the handshake based on the client
+ * key. The response is stored in response which should be at least 28
+ * bytes in length.
+ */
 int compute_response(const char *key, char *response)
 {
 	unsigned char full_key[FULL_KEY_SIZE];
